@@ -40,13 +40,47 @@ interface DashboardData {
   recordCount: number;
   solicitantes: Record<string, { count: number; pct: number }>;
   bairros: Array<{ pos: number; nome: string; valor: number }>;
-  enderecos: Array<{ pos: number; local: string; valor: number }>;
+  enderecos: Array<{ pos: number; local: string; valor: number; bairro?: string }>;
   efetivos: Array<{ rank: number; nome: string; cargo: string; escala: string; valor: number }>;
   periodos: Record<string, { total: number; fixo: number; moto: number }>;
   diasSemana: Array<{ label: string; count: number }>;
   mensal: Array<{ label: string; count: number }>;
   preventivoVsCorretivo: { preventivo: number; corretivo: number };
 }
+
+// Custom tooltip for turnos/periodos analysis
+const CustomTurnTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const colors = ["#0ea5e9", "#6366f1", "#8b5cf6"];
+    let color = "#6366f1";
+    let desc = "";
+    if (data.label === "Manhã") {
+      color = "#0ea5e9";
+      desc = "Pico matutino de trânsito e fluxo de serviços";
+    } else if (data.label === "Tarde") {
+      color = "#6366f1";
+      desc = "Pico vespertino e movimentação comercial/escolar";
+    } else if (data.label === "Noite") {
+      color = "#8b5cf6";
+      desc = "Rondas preventivas e suporte a eventos noturnos";
+    }
+
+    return (
+      <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-xl backdrop-blur-md max-w-[220px]">
+        <div className="flex items-center space-x-2 mb-1.5">
+          <span className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: color }}></span>
+          <span className="text-[11px] font-bold text-white font-display uppercase tracking-wider">{data.label}</span>
+        </div>
+        <p className="text-xs text-slate-300 font-medium mb-1">
+          Atendimentos: <span className="text-white font-bold">{data.total?.toLocaleString() || 0}</span>
+        </p>
+        <p className="text-[10px] text-slate-400 leading-relaxed font-sans">{desc}</p>
+      </div>
+    );
+  }
+  return null;
+};
 
 export default function App() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -59,7 +93,15 @@ export default function App() {
   // Filter States
   const [bairroFilter, setBairroFilter] = useState("");
   const [enderecoFilter, setEnderecoFilter] = useState("");
+  const [selectedBairro, setSelectedBairro] = useState<string | null>(null);
   const [efetivoFilter, setEfetivoFilter] = useState("");
+  const [geoViewMode, setGeoViewMode] = useState<"mapa" | "pontos">("mapa");
+  const [isExploded, setIsExploded] = useState(false);
+  const [hoveredMapBairro, setHoveredMapBairro] = useState<string | null>(null);
+
+  // Date Range Filter States
+  const [startDate, setStartDate] = useState("2026-01-01");
+  const [endDate, setEndDate] = useState("2026-06-30");
 
   // Selection state for Efetivo tab
   const [selectedAgentIndex, setSelectedAgentIndex] = useState<number | null>(null);
@@ -67,26 +109,24 @@ export default function App() {
   const [agentAiResult, setAgentAiResult] = useState<string | null>(null);
 
   // Simulation & Custom Query States
-  const [selectedScenario, setSelectedScenario] = useState("chuva_100mm_ibura");
+  const [selectedScenario, setSelectedScenario] = useState("carnaval_recife");
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
   const [customPrompt, setCustomPrompt] = useState("");
 
   // Fetch metrics from Express server
-  const loadStats = async (reload = false) => {
+  const loadStats = async (reload = false, start = startDate, end = endDate) => {
     if (reload) setIsRefreshing(true);
     else setIsLoading(true);
     setError(null);
 
     try {
-      const res = await fetch(`/api/data?reload=${reload}`);
+      const res = await fetch(`/api/data?reload=${reload}&startDate=${start}&endDate=${end}`);
       if (!res.ok) throw new Error("Não foi possível carregar dados estruturados.");
       const payload: DashboardData = await res.json();
       setData(payload);
-      // Select the first agent as default
-      if (payload.efetivos && payload.efetivos.length > 0) {
-        setSelectedAgentIndex(0);
-      }
+      // Keep selection clean/empty as requested by the user
+      setSelectedAgentIndex(null);
     } catch (err: any) {
       setError(err.message || "Erro de conexão com o painel.");
     } finally {
@@ -96,7 +136,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadStats();
+    loadStats(false, "2026-01-01", "2026-06-30");
     // Set default theme to dark by adding class to body
     setIsDark(true);
     document.documentElement.classList.add("dark");
@@ -104,12 +144,17 @@ export default function App() {
 
   // Theme Toggler
   const toggleTheme = () => {
-    setIsDark(!isDark);
-    if (!isDark) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    setIsDark((prev) => {
+      const next = !prev;
+      if (next) {
+        document.documentElement.classList.add("dark");
+        document.documentElement.classList.remove("light");
+      } else {
+        document.documentElement.classList.remove("dark");
+        document.documentElement.classList.add("light");
+      }
+      return next;
+    });
   };
 
   // Helper parser for markdown response from Gemini to styled safe HTML
@@ -168,14 +213,16 @@ export default function App() {
     setAiReport(null);
 
     let query = "";
-    if (scenarioKey === "chuva_100mm_ibura") {
-      query = "Simule impacto tático de tempestade de 100mm com inundações profundas no Ibura. Proponha relocação analítica de efetivos, definindo prioridade de atuação física (motos x fixos) para combater a saturação de carros na Ladeira da Cohab.";
-    } else if (scenarioKey === "acidente_dois_rios") {
-      query = "Simule bloqueio por colisão violenta múltipla na Av Dois Rios (Ladeira da Cohab) no horário do pico da tarde. Destaque quais caminhos e cruzamentos do entorno devem receber equipes para desvios prioritários de linhas de ônibus.";
-    } else if (scenarioKey === "bloqueio_cais_apolo") {
-      query = "Simule obstrução total do Cais do Apoio para evento festivo no Bairro do Recife. Detalhe plano de contingência para evitar colapso no acesso sul da Ponte do Limoeiro e coordenação visual com painéis digitais móveis de trânsito.";
+    if (scenarioKey === "carnaval_recife") {
+      query = "Simule o esquema de tráfego tático, controle de grandes demandas e bloqueios emergenciais para o período do Carnaval de Recife. Detalhe os desvios prioritários de ônibus e carros nas pontes de acesso ao Bairro do Recife, o posicionamento estratégico das viaturas e batedores motorizados para garantir a fluidez e a segurança máxima dos foliões e moradores.";
+    } else if (scenarioKey === "corredor_agamenon") {
+      query = "Simule o plano de contingência para saturação severa ou retenção extrema no Corredor Agamenon Magalhães. Indique rotas alternativas viáveis em caso de colisão ou alagamento severo em trechos críticos, definindo a quantidade e o posicionamento de agentes em motos e pontos fixos para diminuir a cauda de congestionamento.";
+    } else if (scenarioKey === "corredor_av_norte") {
+      query = "Simule operações táticas para mitigar o gargalo de tráfego estrutural ao longo do Corredor da Av Norte. Detalhe como as equipes operacionais devem gerenciar os cruzamentos críticos nos horários de pico, coordenando os semáforos, priorizando o transporte público e efetuando a remoção imediata de veículos com pane ou de carga.";
+    } else if (scenarioKey === "abdias_carvalho") {
+      query = "Planeje as medidas de apoio estratégico e escoamento viário na Av Eng Abdias de Carvalho (Eixo Oeste) em dias de eventos de altíssima demanda ou partidas de futebol. Detalhe a ação preventiva da CTTU no controle de estacionamento irregular em calçadas/vias e o planejamento de faixas reversíveis móveis temporárias.";
     } else {
-      query = "Planeje operações para combater o gargalo estrutural na Av Conselheiro Aguiar (Boa Viagem) em fim de tarde de sexta-feira. Como agentes motorizados devem atuar móvel para suprimir estacionamentos irregulares de aplicativos de transporte.";
+      query = "Faça um plano analítico geral de fluxo e alocação tática de agentes da CTTU para os principais eixos de tráfego em Recife.";
     }
 
     const systemPrompt = `Você é o Superintendente do CET (Centro de Engenharia de Tráfego) e Operações da CTTU Recife. 
@@ -259,18 +306,29 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
     }
   };
 
+  const getNeighborhoodData = (name: string) => {
+    const found = data?.bairros.find(b => b.nome.trim().toUpperCase() === name.trim().toUpperCase());
+    return found || { valor: 0, pos: 99 };
+  };
+
   // Filtering calculations on client-side for dynamic data grids
   const filteredBairros = data?.bairros.filter(b => 
     b.nome.toLowerCase().includes(bairroFilter.toLowerCase())
   ) || [];
 
-  const filteredEnderecos = data?.enderecos.filter(e => 
-    e.local.toLowerCase().includes(enderecoFilter.toLowerCase())
-  ) || [];
+  const filteredEnderecos = data?.enderecos.filter(e => {
+    const matchesKeyword = e.local.toLowerCase().includes(enderecoFilter.toLowerCase());
+    if (selectedBairro) {
+      return matchesKeyword && e.bairro?.trim().toUpperCase() === selectedBairro.trim().toUpperCase();
+    }
+    return matchesKeyword;
+  }) || [];
 
-  const filteredEfetivos = data?.efetivos.filter(a => 
+  const allFilteredEfetivos = data?.efetivos.filter(a => 
     a.nome.toLowerCase().includes(efetivoFilter.toLowerCase())
   ) || [];
+
+  const filteredEfetivos = efetivoFilter ? allFilteredEfetivos : allFilteredEfetivos.slice(0, 15);
 
   const selectedAgent = selectedAgentIndex !== null && data ? data.efetivos[selectedAgentIndex] : null;
 
@@ -320,9 +378,9 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
   });
 
   const turnosChartData = [
-    { label: "Manhã", Fixo: data.periodos.MANHÃ.fixo, Motorizado: data.periodos.MANHÃ.moto },
-    { label: "Tarde", Fixo: data.periodos.TARDE.fixo, Motorizado: data.periodos.TARDE.moto },
-    { label: "Noite", Fixo: data.periodos.NOITE.fixo, Motorizado: data.periodos.NOITE.moto }
+    { label: "Manhã", total: data?.periodos?.MANHÃ?.total || 0 },
+    { label: "Tarde", total: data?.periodos?.TARDE?.total || 0 },
+    { label: "Noite", total: data?.periodos?.NOITE?.total || 0 }
   ];
 
   return (
@@ -348,12 +406,49 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
             </div>
           </div>
 
-          {/* Quick controls */}
-          <div className="flex items-center space-x-4">
-            <span className="hidden md:inline-flex items-center px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200/50 dark:border-slate-800">
-              <Clock className="w-3.5 h-3.5 mr-1.5 text-slate-400 dark:text-indigo-400/80" />
-              01 Jan - 31 Dez 2026
-            </span>
+          {/* Quick controls with Date Range Pickers */}
+          <div className="flex items-center flex-wrap gap-2 sm:gap-4 justify-end">
+            <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-900 p-1.5 px-3 rounded-lg border border-slate-200/50 dark:border-slate-800 focus-within:border-indigo-500/50 transition-all">
+              <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-indigo-400" />
+              
+              <div className="flex items-center space-x-1.5">
+                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">De</span>
+                <input 
+                  type="date" 
+                  value={startDate}
+                  min="2026-01-01"
+                  max="2026-12-31"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setStartDate(val);
+                    if (val) {
+                      loadStats(false, val, endDate);
+                    }
+                  }}
+                  className="bg-transparent text-slate-700 dark:text-slate-200 border-none outline-none focus:outline-none focus:ring-0 text-[10px] font-semibold cursor-pointer w-[110px] p-0"
+                />
+              </div>
+
+              <div className="h-3.5 w-[1px] bg-slate-300 dark:bg-slate-800"></div>
+
+              <div className="flex items-center space-x-1.5">
+                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Até</span>
+                <input 
+                  type="date" 
+                  value={endDate}
+                  min="2026-01-01"
+                  max="2026-12-31"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEndDate(val);
+                    if (val) {
+                      loadStats(false, startDate, val);
+                    }
+                  }}
+                  className="bg-transparent text-slate-700 dark:text-slate-200 border-none outline-none focus:outline-none focus:ring-0 text-[10px] font-semibold cursor-pointer w-[110px] p-0"
+                />
+              </div>
+            </div>
 
             {/* Sync trigger button */}
             <button 
@@ -468,7 +563,7 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               
               {/* Card 1: Serviços Urbanos */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between hover:border-indigo-500/30 dark:hover:border-indigo-500/30 transition-all shadow-sm" id="card-servicos">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between hover:border-emerald-500/30 dark:hover:border-emerald-500/30 transition-all shadow-sm" id="card-servicos">
                 <div className="flex justify-between items-start">
                   <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest font-display">Serviços Urbanos</span>
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-500/25">
@@ -477,7 +572,7 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                 </div>
                 <div className="mt-4">
                   <p className="text-3xl font-bold text-slate-900 dark:text-white font-display">
-                    {data.solicitantes["SERVIÇOS URBANOS"]?.pct || "33.4"}<span className="text-indigo-500 dark:text-indigo-400">%</span>
+                    {data.solicitantes["SERVIÇOS URBANOS"]?.pct || "33.4"}<span className="text-emerald-500 dark:text-emerald-400">%</span>
                   </p>
                   <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Sinalização, pintura e conservação da viaria</p>
                 </div>
@@ -506,26 +601,26 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
               </div>
 
               {/* Card 3: Mobilidade */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between hover:border-indigo-500/30 dark:hover:border-indigo-500/30 transition-all shadow-sm" id="card-mobilidade">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between hover:border-sky-500/30 dark:hover:border-sky-500/30 transition-all shadow-sm" id="card-mobilidade">
                 <div className="flex justify-between items-start">
                   <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest font-display">Mobilidade</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-500 dark:bg-indigo-500/25 dark:text-indigo-400 border border-indigo-500/25">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/10 text-sky-600 dark:bg-sky-500/20 dark:text-sky-400 border border-sky-500/25">
                     {data.solicitantes["MOBILIDADE"]?.count.toLocaleString() || "1.632"}
                   </span>
                 </div>
                 <div className="mt-4">
                   <p className="text-3xl font-bold text-slate-900 dark:text-white font-display">
-                    {data.solicitantes["MOBILIDADE"]?.pct || "29.5"}<span className="text-indigo-500 dark:text-indigo-400">%</span>
+                    {data.solicitantes["MOBILIDADE"]?.pct || "29.5"}<span className="text-sky-500 dark:text-sky-400">%</span>
                   </p>
                   <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Desvios, picos e monitoramento de fluxo</p>
                 </div>
                 <div className="w-full bg-slate-100 dark:bg-slate-950 h-1 rounded-full mt-4 overflow-hidden">
-                  <div className="bg-indigo-400 h-full" style={{ width: `${data.solicitantes["MOBILIDADE"]?.pct || 29.5}%` }}></div>
+                  <div className="bg-sky-500 h-full" style={{ width: `${data.solicitantes["MOBILIDADE"]?.pct || 29.5}%` }}></div>
                 </div>
               </div>
 
               {/* Card 4: Espaços Públicos */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between hover:border-indigo-500/30 dark:hover:border-indigo-500/30 transition-all shadow-sm" id="card-espacos">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between hover:border-amber-500/30 dark:hover:border-amber-500/30 transition-all shadow-sm" id="card-espacos">
                 <div className="flex justify-between items-start">
                   <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest font-display">Espaços Públicos</span>
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 border border-amber-500/25">
@@ -534,7 +629,7 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                 </div>
                 <div className="mt-4">
                   <p className="text-3xl font-bold text-slate-900 dark:text-white font-display">
-                    {data.solicitantes["ESPAÇOS PÚBLICOS"]?.pct || "5.6"}<span className="text-indigo-500 dark:text-indigo-400">%</span>
+                    {data.solicitantes["ESPAÇOS PÚBLICOS"]?.pct || "5.6"}<span className="text-amber-500 dark:text-amber-400">%</span>
                   </p>
                   <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Parques, praças e mercados públicos</p>
                 </div>
@@ -610,8 +705,18 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                       />
                       <Bar dataKey="atendimentos" name="Eventos" radius={[0, 4, 4, 0]}>
                         {solicitantesChartData.map((entry, index) => {
-                          const colors = ["#10b981", "#6366f1", "#0ea5e9", "#f59e0b", "#94a3b8"];
-                          return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                          const nameLower = entry.name.toLowerCase();
+                          let fill = "#6366f1";
+                          if (nameLower.includes("urbano")) {
+                            fill = "#10b981";
+                          } else if (nameLower.includes("cultura") || nameLower.includes("lazer") || nameLower.includes("sociocult")) {
+                            fill = "#6366f1";
+                          } else if (nameLower.includes("mobilidade")) {
+                            fill = "#0ea5e9";
+                          } else if (nameLower.includes("espaço") || nameLower.includes("espaco")) {
+                            fill = "#f59e0b";
+                          }
+                          return <Cell key={`cell-${index}`} fill={fill} />;
                         })}
                       </Bar>
                     </BarChart>
@@ -692,7 +797,7 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-slate-100 dark:border-slate-800 gap-2">
                   <div>
                     <h3 className="font-display font-semibold text-sm text-slate-900 dark:text-white">Bairros Monitorados</h3>
-                    <p className="text-[10px] text-slate-400">Classificação demográfica por volume de ocorrências</p>
+                    <p className="text-[10px] text-slate-400">Clique para filtrar os pontos críticos por bairro</p>
                   </div>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
@@ -709,23 +814,35 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                 {/* Scroller Area */}
                 <div className="overflow-y-auto max-h-96 pr-1 mt-4 space-y-1">
                   {filteredBairros.length > 0 ? (
-                    filteredBairros.map((b) => (
-                      <div 
-                        key={b.nome}
-                        className="flex items-center justify-between p-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-950/60 transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-800/50"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 w-5">#{b.pos}</span>
-                          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">{b.nome}</span>
+                    filteredBairros.map((b) => {
+                      const isSelected = selectedBairro?.trim().toUpperCase() === b.nome.trim().toUpperCase();
+                      return (
+                        <div 
+                          key={b.nome}
+                          onClick={() => setSelectedBairro(isSelected ? null : b.nome)}
+                          className={`flex items-center justify-between p-2.5 rounded-xl transition-all border cursor-pointer ${
+                            isSelected 
+                              ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-900 dark:text-indigo-200 shadow-sm" 
+                              : "hover:bg-slate-50 dark:hover:bg-slate-950/60 border-transparent hover:border-slate-100 dark:hover:border-slate-800/50"
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <span className="text-[10px] font-semibold text-slate-450 dark:text-slate-500 w-5">#{b.pos}</span>
+                            <span className="text-xs font-bold uppercase tracking-wide">{b.nome}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs font-extrabold text-slate-900 dark:text-slate-150">{b.valor}</span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold border ${
+                              isSelected 
+                                ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-600 dark:text-indigo-400" 
+                                : "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/10"
+                            }`}>
+                              {((b.valor / data.recordCount) * 100).toFixed(1)}%
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs font-bold text-slate-900 dark:text-slate-100">{b.valor}</span>
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-extrabold border border-indigo-500/20">
-                            {((b.valor / data.recordCount) * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <p className="text-xs text-slate-400 py-6 text-center">Nenhum bairro localizado com este filtro.</p>
                   )}
@@ -752,6 +869,21 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                     />
                   </div>
                 </div>
+
+                {selectedBairro && (
+                  <div className="flex items-center justify-between bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 rounded-xl px-3.5 py-2.5 mt-4 text-[11px] animate-fade-in shadow-inner">
+                    <span className="text-slate-650 dark:text-slate-400 font-semibold">
+                      Filtrado por: <span className="text-indigo-600 dark:text-indigo-400 font-extrabold uppercase bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/15 ml-1">{selectedBairro}</span>
+                    </span>
+                    <button 
+                      onClick={() => setSelectedBairro(null)}
+                      className="text-slate-400 hover:text-red-500 dark:hover:text-red-400 font-bold transition-colors text-xs"
+                      title="Remover filtro de bairro"
+                    >
+                      Remover ×
+                    </button>
+                  </div>
+                )}
 
                 {/* Scroller Area */}
                 <div className="overflow-y-auto max-h-96 pr-1 mt-4 space-y-1">
@@ -833,18 +965,13 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#1e293b" : "#f1f5f9"} />
                       <XAxis dataKey="label" stroke={isDark ? "#475569" : "#94a3b8"} fontSize={10} tickLine={false} />
                       <YAxis stroke={isDark ? "#475569" : "#94a3b8"} fontSize={10} tickLine={false} />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: isDark ? "#0f172a" : "#ffffff", 
-                          borderColor: isDark ? "#1e293b" : "#e2e8f0" ,
-                          color: isDark ? "#f8fafc" : "#0f172a",
-                          fontSize: 10,
-                          borderRadius: 12
-                        }}  
-                      />
-                      <Legend verticalAlign="top" height={24} iconSize={8} wrapperStyle={{ fontSize: 9 }} />
-                      <Bar dataKey="Fixo" stackId="a" fill="#6366f1" name="Presença Fixa" />
-                      <Bar dataKey="Motorizado" stackId="a" fill="#10b981" name="Batedores de Moto" />
+                      <Tooltip content={<CustomTurnTooltip />} />
+                      <Bar dataKey="total" radius={[4, 4, 0, 0]} name="Total de Orientadores">
+                        {turnosChartData.map((entry, index) => {
+                          const colors = ["#0ea5e9", "#6366f1", "#8b5cf6"];
+                          return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                        })}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -907,7 +1034,7 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                               <td className="py-3 pr-2 font-semibold">
                                 <span className={`inline-flex items-center justify-center w-5 h-5 rounded ${
                                   a.rank === 1 ? "bg-amber-500 text-white font-bold" :
-                                  a.rank === 2 ? "bg-slate-350 text-slate-800 dark:text-slate-200 font-bold" :
+                                  a.rank === 2 ? "bg-[#888080] text-white font-bold" :
                                   a.rank === 3 ? "bg-amber-700 text-white font-bold" :
                                   "bg-slate-100 dark:bg-slate-800 text-slate-500"
                                 }`}>
@@ -939,21 +1066,31 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
               <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl flex flex-col justify-between h-fit min-h-[400px] shadow-sm">
                 {selectedAgent ? (
                   <div className="space-y-4">
-                    <div className="flex items-center space-x-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-                      <div className="h-10 w-10 text-xs text-indigo-600 bg-indigo-500/10 flex items-center justify-center rounded-xl font-bold font-display uppercase border border-indigo-500/20 dark:text-indigo-400 dark:bg-indigo-600/10">
-                        {selectedAgent.nome.charAt(0)}
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center space-x-3">
+                        <div className="h-10 w-10 text-xs text-indigo-600 bg-indigo-500/10 flex items-center justify-center rounded-xl font-bold font-display uppercase border border-indigo-500/20 dark:text-indigo-400 dark:bg-indigo-600/10">
+                          {selectedAgent.nome.charAt(0)}
+                        </div>
+                        <div>
+                          <span className="text-[8px] text-indigo-500 dark:text-indigo-450 uppercase font-semibold tracking-wider block">Orientador Selecionado</span>
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white leading-tight uppercase">{selectedAgent.nome}</h4>
+                          <p className="text-[10px] text-slate-400 font-medium">{selectedAgent.cargo}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">{selectedAgent.nome}</h4>
-                        <p className="text-[10px] text-slate-400">{selectedAgent.cargo} • Recife</p>
-                      </div>
+                      <button 
+                        onClick={() => setSelectedAgentIndex(null)}
+                        className="text-[10px] font-extrabold text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors bg-slate-50 dark:bg-slate-950 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-800"
+                        title="Limpar dados do funcionário selecionado"
+                      >
+                        Limpar
+                      </button>
                     </div>
 
                     {/* Metrics detail Grid */}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-                        <span className="text-[9px] text-slate-450 dark:text-slate-400 font-display font-semibold uppercase">Contatos</span>
-                        <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">{selectedAgent.valor}</p>
+                        <span className="text-[9px] text-slate-450 dark:text-slate-400 font-display font-semibold uppercase block">Quantidade Atendimentos</span>
+                        <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">{selectedAgent.valor}</p>
                       </div>
                       <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 flex flex-col justify-between">
                         <span className="text-[9px] text-slate-450 dark:text-slate-400 font-display font-semibold uppercase">Desempenho</span>
@@ -966,11 +1103,11 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
 
                     <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 text-xs space-y-2">
                       <div className="flex justify-between">
-                        <span className="text-slate-450 dark:text-slate-450">Classificação CTTU:</span>
+                        <span className="text-slate-450 dark:text-slate-450 text-[11px]">Classificação CTTU:</span>
                         <strong className="text-indigo-600 dark:text-indigo-400 font-bold uppercase">Top #{selectedAgent.rank} Geral</strong>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-450 dark:text-slate-450">Escala de Horário:</span>
+                        <span className="text-slate-450 dark:text-slate-450 text-[11px]">Escala de Horário:</span>
                         <strong className="text-slate-750 dark:text-slate-350">{selectedAgent.escala}</strong>
                       </div>
                     </div>
@@ -1005,9 +1142,12 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                     </button>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-center py-6 text-slate-400">
-                    <Users className="w-8 h-8 opacity-30 mb-2" />
-                    <p className="text-xs">Selecione um orientador para abrir sua ficha operacional profissional.</p>
+                  <div className="flex flex-col items-center justify-center h-full text-center py-8 text-slate-400">
+                    <Users className="w-10 h-10 opacity-20 mb-3" />
+                    <h5 className="font-bold text-xs text-slate-700 dark:text-slate-350">Ficha Operacional Limpa</h5>
+                    <p className="text-[11px] text-slate-400 max-w-[200px] mt-1 mx-auto leading-relaxed">
+                      Selecione um orientador na lista ao lado para exibir seus dados de atuação, quantidades e parecer da IA.
+                    </p>
                   </div>
                 )}
               </div>
@@ -1041,12 +1181,12 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                   <select 
                     value={selectedScenario}
                     onChange={(e) => setSelectedScenario(e.target.value)}
-                    className="w-full text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-705 dark:text-slate-200"
+                    className="w-full text-xs font-semibold bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-705 dark:text-slate-200"
                   >
-                    <option value="chuva_100mm_ibura">Temporal de 100mm (Alagamentos no Ibura)</option>
-                    <option value="acidente_dois_rios">Colisão Múltipla (Av Dois Rios / Cohab)</option>
-                    <option value="bloqueio_cais_apolo">Interdição total para Corrida (Cais do Apolo)</option>
-                    <option value="pico_sexta_boa_viagem">Pico Retenção Sexta-Feira (Conselheiro Aguiar)</option>
+                    <option value="carnaval_recife">Carnaval de Recife (Operação de Grande Impacto)</option>
+                    <option value="corredor_agamenon">Corredor Agamenon Magalhães (Saturação de Tráfego)</option>
+                    <option value="corredor_av_norte">Corredor Av Norte (Gargalo Estrutural / Fluxo)</option>
+                    <option value="abdias_carvalho">Av Eng Abdias de Carvalho (Apoio Estratégico / Eixo Oeste)</option>
                   </select>
 
                   <button 
