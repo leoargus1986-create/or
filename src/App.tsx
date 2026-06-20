@@ -482,9 +482,9 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
           <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/5 rounded-full filter blur-3xl -mr-20 -mt-20"></div>
           <div className="relative z-10 md:flex md:items-center md:justify-between">
             <div>
-              <h2 className="text-xl font-bold tracking-tight font-display text-white">Monitoramento Executivo da Mobilidade</h2>
+              <h2 className="text-xl font-bold tracking-tight font-display text-white">GESTÃO OPERACIONAL - ORIENTADORES DE TRÂNSITO</h2>
               <p className="text-slate-400 mt-1 max-w-xl text-xs leading-relaxed">
-                Auditoria de produtividade de campo e atuação dos orientadores de trânsito em Recife. Insira novas ocorrências diretamente no Google Sheets para sincronização automática.
+                Produtividade e Atuação em Campo: Sincronização em Tempo Real via Google Sheets.
               </p>
             </div>
             <div className="mt-4 md:mt-0 flex items-baseline space-x-2 bg-slate-950/65 px-4 py-2.5 rounded-xl border border-slate-800">
