@@ -9,7 +9,7 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSncLt5jGyFnv8AFXn08fMzmlUJv89SykRA0kI__zAiJPor5kzOaMAOQYpBKR7ONBFnZuJSs7atn0AU/pub?gid=1483875192&single=true&output=csv";
 
 // Lazy-loaded Gemini SDK setup
@@ -493,10 +493,60 @@ app.get("/api/data", async (req, res) => {
     const headerRow = rows[0];
     const dataRows = rows.slice(1);
 
-    // Apply date range filters if present
+    const reqDiaSemana = req.query.diaSemana ? String(req.query.diaSemana).trim() : undefined;
+    const reqBairro = req.query.bairro ? String(req.query.bairro).trim() : undefined;
+    const reqSolicitante = req.query.solicitante ? String(req.query.solicitante).trim() : undefined;
+
+    // Apply date range and interactive filters if present
     const filteredDataRows = dataRows.filter(row => {
       const dateStr = row[0] || "";
-      return isRowWithinRange(dateStr, startDate, endDate);
+      if (!isRowWithinRange(dateStr, startDate, endDate)) {
+        return false;
+      }
+
+      // 1. Solicitante filter
+      if (reqSolicitante) {
+        const solicitanteCol = (row[2] || "OUTRO").trim().toUpperCase();
+        let normalizedSolicitante = "";
+        if (solicitanteCol.includes("SERVIÇOS URBANOS")) normalizedSolicitante = "SERVIÇOS URBANOS";
+        else if (solicitanteCol.includes("CULTURA E LAZER") || solicitanteCol.includes("CULTURA")) normalizedSolicitante = "CULTURA E LAZER";
+        else if (solicitanteCol.includes("MOBILIDADE")) normalizedSolicitante = "MOBILIDADE";
+        else if (solicitanteCol.includes("ESPAÇOS PÚBLICOS") || solicitanteCol.includes("ESPACOS")) normalizedSolicitante = "ESPAÇOS PÚBLICOS";
+
+        if (normalizedSolicitante !== reqSolicitante.toUpperCase()) {
+          return false;
+        }
+      }
+
+      // 2. Bairro filter
+      if (reqBairro) {
+        let bairroCol = (row[3] || "OUTRO").trim().toUpperCase();
+        if (bairroCol === "RECEITA" || bairroCol === "RECEITA DA PENHA" || bairroCol === "BAIRRO DO RECIFE") {
+          bairroCol = "RECIFE";
+        }
+        if (bairroCol !== reqBairro.toUpperCase()) {
+          return false;
+        }
+      }
+
+      // 3. Dia da semana filter
+      if (reqDiaSemana) {
+        const diaSemanaCol = (row[42] || "OUTRO").trim().toUpperCase();
+        let normDia = diaSemanaCol;
+        if (diaSemanaCol === "SAB.") normDia = "SÁB.";
+
+        let cleanReq = reqDiaSemana.toUpperCase();
+        if (!cleanReq.endsWith(".")) {
+          cleanReq += ".";
+        }
+        if (cleanReq === "SAB.") cleanReq = "SÁB.";
+
+        if (normDia !== cleanReq) {
+          return false;
+        }
+      }
+
+      return true;
     });
 
     const filteredRows = [headerRow, ...filteredDataRows];

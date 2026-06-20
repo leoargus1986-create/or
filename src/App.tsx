@@ -19,8 +19,10 @@ import {
   ShieldCheck,
   ChevronRight,
   TrendingDown,
-  ThumbsUp
+  ThumbsUp,
+  Download
 } from "lucide-react";
+import { exportToPDF } from "./utils/pdfExport";
 import { 
   AreaChart, 
   Area, 
@@ -94,6 +96,8 @@ export default function App() {
   const [bairroFilter, setBairroFilter] = useState("");
   const [enderecoFilter, setEnderecoFilter] = useState("");
   const [selectedBairro, setSelectedBairro] = useState<string | null>(null);
+  const [selectedDiaSemana, setSelectedDiaSemana] = useState<string | null>(null);
+  const [selectedSolicitante, setSelectedSolicitante] = useState<string | null>(null);
   const [efetivoFilter, setEfetivoFilter] = useState("");
   const [geoViewMode, setGeoViewMode] = useState<"mapa" | "pontos">("mapa");
   const [isExploded, setIsExploded] = useState(false);
@@ -115,13 +119,31 @@ export default function App() {
   const [customPrompt, setCustomPrompt] = useState("");
 
   // Fetch metrics from Express server
-  const loadStats = async (reload = false, start = startDate, end = endDate) => {
+  const loadStats = async (
+    reload = false, 
+    start = startDate, 
+    end = endDate,
+    diaSemana = selectedDiaSemana,
+    solicitante = selectedSolicitante,
+    bairro = selectedBairro
+  ) => {
     if (reload) setIsRefreshing(true);
     else setIsLoading(true);
     setError(null);
 
     try {
-      const res = await fetch(`/api/data?reload=${reload}&startDate=${start}&endDate=${end}`);
+      let url = `/api/data?reload=${reload}&startDate=${start}&endDate=${end}`;
+      if (diaSemana) {
+        url += `&diaSemana=${encodeURIComponent(diaSemana)}`;
+      }
+      if (solicitante) {
+        url += `&solicitante=${encodeURIComponent(solicitante)}`;
+      }
+      if (bairro) {
+        url += `&bairro=${encodeURIComponent(bairro)}`;
+      }
+
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Não foi possível carregar dados estruturados.");
       const payload: DashboardData = await res.json();
       setData(payload);
@@ -133,6 +155,28 @@ export default function App() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
+  };
+
+  const handleSelectBairro = (bairro: string | null) => {
+    setSelectedBairro(bairro);
+    loadStats(false, startDate, endDate, selectedDiaSemana, selectedSolicitante, bairro);
+  };
+
+  const handleSelectDiaSemana = (dia: string | null) => {
+    setSelectedDiaSemana(dia);
+    loadStats(false, startDate, endDate, dia, selectedSolicitante, selectedBairro);
+  };
+
+  const handleSelectSolicitante = (solicitante: string | null) => {
+    setSelectedSolicitante(solicitante);
+    loadStats(false, startDate, endDate, selectedDiaSemana, solicitante, selectedBairro);
+  };
+
+  const handleClearAllFilters = () => {
+    setSelectedBairro(null);
+    setSelectedDiaSemana(null);
+    setSelectedSolicitante(null);
+    loadStats(false, startDate, endDate, null, null, null);
   };
 
   useEffect(() => {
@@ -160,24 +204,44 @@ export default function App() {
   // Helper parser for markdown response from Gemini to styled safe HTML
   const formatMarkdown = (text: string): string => {
     let html = text;
-    // Section Title
-    html = html.replace(/### (.*?)\n/g, '<h4 class="font-display font-bold text-xs text-brand-500 dark:text-sky-400 mt-4 mb-1.5 flex items-center space-x-1"><span>✦</span> <span>$1</span></h4>');
+
+    // Simple table parser before standard line-by-line paragraph wrapping
+    const tableRegex = /((?:\|[^\n]*\|(?:\n|$))+)/g;
+    html = html.replace(tableRegex, (match) => {
+      const rows = match.trim().split("\n");
+      const htmlRows = rows.map((row, rIdx) => {
+        if (row.includes("---")) return ""; // ignore separator rows
+        const cells = row.split("|").map(c => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+        const cellTag = rIdx === 0 ? "th" : "td";
+        const thClass = "px-3 py-1.5 bg-slate-100 dark:bg-slate-800 font-bold text-left border border-slate-200/50 dark:border-slate-700/60 text-slate-800 dark:text-slate-150";
+        const tdClass = "px-3 py-1.5 text-left border border-slate-200/50 dark:border-slate-700/50 text-slate-600 dark:text-slate-300";
+        const cellMarkup = cells.map(cell => `<${cellTag} class="${rIdx === 0 ? thClass : tdClass}">${cell}</${cellTag}>`).join("");
+        return `<tr class="${rIdx % 2 === 0 ? "bg-slate-50/50 dark:bg-slate-900/40" : ""}">${cellMarkup}</tr>`;
+      }).filter(r => r !== "").join("");
+      return `<div class="my-3.5 overflow-x-auto border border-slate-200/50 dark:border-slate-800/80 rounded-xl"><table class="min-w-full text-[10.5px] border-collapse">${htmlRows}</table></div>`;
+    });
+
+    // Blockquote handling (lines starting with >)
+    html = html.replace(/^\s*>\s+(.*?)$/gm, '<div class="pl-3.5 border-l-3 border-indigo-500 italic text-slate-700 dark:text-indigo-350 bg-indigo-50/30 dark:bg-slate-950/40 py-1 px-2.5 rounded-r-lg my-3">$1</div>');
+
+    // Section Titles
+    html = html.replace(/### (.*?)\n/g, '<h4 class="font-display font-bold text-xs text-brand-500 dark:text-sky-450 mt-4 mb-1.5 flex items-center space-x-1"><span>✦</span> <span>$1</span></h4>');
     html = html.replace(/## (.*?)\n/g, '<h3 class="font-display font-bold text-sm text-slate-800 dark:text-slate-100 mt-5 border-b border-slate-100 dark:border-slate-800 pb-1.5 mb-2">$1</h3>');
     html = html.replace(/# (.*?)\n/g, '<h2 class="font-display font-extrabold text-base text-slate-900 dark:text-slate-50 mt-6 pb-2 mb-3 border-b border-slate-200 dark:border-slate-700">$1</h2>');
 
     // Bold text
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-slate-900 dark:text-slate-100 bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">$1</strong>');
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-slate-900 dark:text-slate-150 bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">$1</strong>');
     
     // Unordered item list formatting
     html = html.replace(/^\s*[\-\*]\s+(.*?)$/gm, '<li class="ml-4 list-disc text-slate-600 dark:text-slate-300 text-xs mb-1">$1</li>');
 
-    // Wrap paragraphs
+    // Wrap paragraphs - only wrap lines that are not part of HTML tables/headers/lists
     const blocks = html.split("\n");
     const output = blocks.map(block => {
       const b = block.trim();
-      if (b.startsWith("<li") || b.startsWith("<h")) return block;
+      if (b.startsWith("<li") || b.startsWith("<h") || b.startsWith("<div") || b.startsWith("<table") || b.startsWith("<tr") || b.startsWith("<thead") || b.startsWith("<tbody") || b.startsWith("<th") || b.startsWith("<td") || b.startsWith("</div") || b.startsWith("</table") || b.startsWith("</tr") || b.startsWith("</thead") || b.startsWith("</tbody")) return block;
       if (!b) return "";
-      return `<p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-2">${block}</p>`;
+      return `<p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-1.5">${block}</p>`;
     }).join("");
 
     return output;
@@ -301,6 +365,71 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
       setCustomPrompt("");
     } catch {
       setAiReport("Erro de comunicação com o assistente inteligente.");
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  // Generate Senior BI Executive Report (Markdown formatting compliant for A4 PDF page grids)
+  const generateBIExecutiveReport = async () => {
+    setIsAiLoading(true);
+    setAiReport(null);
+
+    const systemPrompt = `Você é um Analista de Dados Sênior e Especialista em Business Intelligence com foco em Engenharia de Tráfego e Mobilidade Urbana da CTTU Recife. 
+Seu objetivo é transformar os dados consolidados do dashboard no ano de 2026 em um relatório executivo formal de alto impacto, estruturado estritamente para exportação em folha de tamanho A4 em PDF.
+
+Siga rigorosamente as seguintes diretrizes de formatação:
+1. Use formatação Markdown estrita para títulos (#, ##, ###) e listas (usando "-" ou "*").
+2. Não use tabelas muito largas (máximo de 3 a 4 colunas) para evitar cortes na página. Uma tabela com cabeçalho de 3 colunas (Métrica | Valor Atual | Variação %) é perfeita.
+3. Use blocos de destaque (Quotes usando ">") para insights críticos para o comitê deliberativo.
+4. Mantenha os parágrafos curtos (máximo de 4 linhas) para garantir de 100% de legibilidade na página impressa.
+5. Escreva com vocabulário corporativo de alto nível, fundamentado nos dados reais de Recife.`;
+
+    const dateStr = new Date().toLocaleDateString("pt-BR", { year: "numeric", month: "long", day: "numeric" });
+    const userQuery = `Gere o relatório estruturado exatamente com os seguintes capítulos e dados de entrada:
+
+# RELATÓRIO EXECUTIVO DE DESEMPENHO
+**Data de Geração:** ${dateStr}
+**Período de Análise:** Janeiro a Dezembro de 2026
+
+---
+
+## 1. RESUMO EXECUTIVO (Métricas Principais)
+Apresente aqui os principais KPIs encontrados nos dados em formato de lista com bullet points. Use negrito para os números:
+* Total de atendimentos e ocorrências consolidadas: **${data?.recordCount || 5471} registros**.
+* Eficácia preventiva das guarnições em Recife: **${data?.preventivoVsCorretivo.preventivo || 91.6}% preventivo** contra **${data?.preventivoVsCorretivo.corretivo || 8.4}% corretivos**.
+* Bairro líder em registros de mobilidade e intervenções: Bairro **${data?.bairros[0]?.nome || "Boa Viagem"}** com **${data?.bairros[0]?.valor || 890} registros**.
+* O corredor urbano de maior gargalo de infraestrutura em campo foi a **${data?.enderecos[0]?.local || "Ladeira da Cohab"}**.
+
+## 2. ANÁLISE DE DESEMPENHO E INSIGHTS RELEVANTES
+Interprete os dados apresentados de forma técnica e objetiva. Explique o "porquê". Por exemplo: o caráter preventivo elevado de 91% mitiga o risco de colapso nos corredores integrados. No entanto, o volume excessivo no Turno da Tarde (${data?.periodos.TARDE.total || 2150} registros) em comparação com o Turno da Noite (${data?.periodos.NOITE.total || 980} registros) sobrecarrega o contingente semafórico descentralizado.
+* **Destaques Positivos:** Altíssimo índice preventivo institucional de 91.6% e rápido acionamento de forças volantes em motos no Turno da Manhã (${data?.periodos.MANHÃ.total || 1800} registros).
+* **Pontos de Atenção/Gargalos:** Excessiva dependência da presença física de agentes em cruzamentos fixos e picos de retenção física acumulada nos horários de pico da tarde.
+
+## 3. COMPARAÇÃO / EVOLUÇÃO
+Crie uma tabela Markdown compacta mostrando a evolução dos dados mais importantes, respeitando exatamente a estrutura de 3 colunas:
+Métrica | Valor Atual | Variação %
+Atendimentos CTTU | ${data?.recordCount || 5471} ações | +12.4% vs 2025
+Preventivos de Campo | ${data?.preventivoVsCorretivo.preventivo || 91.6}% | +3.1% vs 2025
+Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5% vs 2025
+
+## 4. RECOMENDAÇÕES E PRÓXIMOS PASSOS
+> **Recomendação Estratégica:** Recomenda-se reescalonar dinamicamente 15% do contingente de cruzamentos estáticos operantes do Turno da Manhã para cobrir os eixos saturados da Ladeira da Cohab e Agamenon Magalhães no Turno da Tarde. Isso impulsionará a velocidade operacional média de remoção de veículos com pane e desobstruirá faixas prioritárias de transporte coletivo.
+
+---
+*Fim do Relatório. Pronto para conversão em PDF.*`;
+
+    try {
+      const res = await fetch("/api/ai/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ systemPrompt, userQuery })
+      });
+      if (!res.ok) throw new Error();
+      const payload = await res.json();
+      setAiReport(payload.result);
+    } catch {
+      setAiReport("Falha ao compilar o relatório executivo em tempo real. Verifique as configurações de rede do Gemini.");
     } finally {
       setIsAiLoading(false);
     }
@@ -553,6 +682,78 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
           </nav>
         </div>
 
+        {/* Unified Active Filters Banner */}
+        {(selectedBairro || selectedDiaSemana || selectedSolicitante) ? (
+          <div className="bg-gradient-to-r from-indigo-500/10 via-indigo-500/5 to-transparent border border-indigo-500/15 p-4 rounded-xl mb-6 flex flex-wrap items-center justify-between gap-3 animate-fade-in shadow-sm">
+            <div className="flex items-center space-x-2">
+              <span className="p-1 px-1.5 rounded bg-indigo-500/20 text-indigo-650 dark:text-indigo-300 font-extrabold text-[9px] uppercase tracking-wider border border-indigo-500/25">
+                Filtros Cruzados Ativos
+              </span>
+              <p className="text-[10.5px] text-slate-650 dark:text-slate-300">
+                Os indicadores em todos os painéis e gráficos foram filtrados simultaneamente para a interseção selecionada.
+              </p>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-1.5 font-sans justify-end">
+              {selectedBairro && (
+                <div className="flex items-center space-x-1 bg-indigo-100 dark:bg-indigo-950/65 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-indigo-300/30">
+                  <span className="uppercase text-[8px] font-extrabold text-indigo-400 mr-0.5">Bairro:</span>
+                  <span>{selectedBairro}</span>
+                  <button 
+                    onClick={() => handleSelectBairro(null)}
+                    className="ml-1 text-red-500 dark:text-red-400 hover:text-red-600 transition-colors cursor-pointer font-extrabold"
+                    title="Remover filtro de bairro"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              
+              {selectedDiaSemana && (
+                <div className="flex items-center space-x-1 bg-violet-100 dark:bg-violet-950/65 text-violet-700 dark:text-violet-350 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-violet-300/30">
+                  <span className="uppercase text-[8px] font-extrabold text-violet-400 mr-0.5">Dia:</span>
+                  <span>{selectedDiaSemana}</span>
+                  <button 
+                    onClick={() => handleSelectDiaSemana(null)}
+                    className="ml-1 text-red-500 dark:text-red-400 hover:text-red-600 transition-colors cursor-pointer font-extrabold"
+                    title="Remover filtro de dia da semana"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              
+              {selectedSolicitante && (
+                <div className="flex items-center space-x-1 bg-emerald-100 dark:bg-emerald-950/65 text-emerald-700 dark:text-emerald-350 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-emerald-300/30">
+                  <span className="uppercase text-[8px] font-extrabold text-emerald-400 mr-0.5">Serviço:</span>
+                  <span>{selectedSolicitante}</span>
+                  <button 
+                    onClick={() => handleSelectSolicitante(null)}
+                    className="ml-1 text-red-500 dark:text-red-400 hover:text-red-600 transition-colors cursor-pointer font-extrabold"
+                    title="Remover filtro de serviço"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+
+              <button
+                onClick={handleClearAllFilters}
+                className="px-2.5 py-1 text-[10px] font-extrabold bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-800 transition-all cursor-pointer shadow-sm"
+              >
+                Limpar Todos
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200/50 dark:border-slate-900 px-4 py-2.5 rounded-xl mb-6 text-[10.5px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 dark:bg-indigo-400 animate-pulse"></span>
+              Filtros cruzados integrados ativos: clique em um dia na lista ou nos cards de serviço para filtrar e adaptar todos os painéis.
+            </span>
+          </div>
+        )}
+
         {/* =======================================================
             TAB COMPONENT 1: VISÃO GERAL
         ======================================================= */}
@@ -563,7 +764,21 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               
               {/* Card 1: Serviços Urbanos */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between hover:border-emerald-500/30 dark:hover:border-emerald-500/30 transition-all shadow-sm" id="card-servicos">
+              <div 
+                onClick={() => handleSelectSolicitante(selectedSolicitante === "SERVIÇOS URBANOS" ? null : "SERVIÇOS URBANOS")}
+                className={`bg-white dark:bg-slate-900 border p-5 rounded-2xl flex flex-col justify-between transition-all duration-200 shadow-sm cursor-pointer select-none relative overflow-hidden ${
+                  selectedSolicitante === "SERVIÇOS URBANOS" 
+                    ? "border-emerald-500 ring-4 ring-emerald-500/10 dark:ring-emerald-500/20 bg-emerald-50/10 dark:bg-emerald-950/20 scale-[1.02]" 
+                    : "border-slate-200/60 dark:border-slate-800 hover:border-emerald-500/40 dark:hover:border-emerald-500/40 hover:scale-[1.01]"
+                }`}
+                id="card-servicos"
+                title="Clique para filtrar por Serviços Urbanos"
+              >
+                {selectedSolicitante === "SERVIÇOS URBANOS" && (
+                  <div className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-bl-lg tracking-wider">
+                    Filtro Ativo
+                  </div>
+                )}
                 <div className="flex justify-between items-start">
                   <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest font-display">Serviços Urbanos</span>
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-500/25">
@@ -582,7 +797,21 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
               </div>
 
               {/* Card 2: Cultura e Lazer */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between hover:border-indigo-500/30 dark:hover:border-indigo-500/30 transition-all shadow-sm" id="card-cultura">
+              <div 
+                onClick={() => handleSelectSolicitante(selectedSolicitante === "CULTURA E LAZER" ? null : "CULTURA E LAZER")}
+                className={`bg-white dark:bg-slate-900 border p-5 rounded-2xl flex flex-col justify-between transition-all duration-200 shadow-sm cursor-pointer select-none relative overflow-hidden ${
+                  selectedSolicitante === "CULTURA E LAZER" 
+                    ? "border-indigo-500 ring-4 ring-indigo-500/10 dark:ring-indigo-500/20 bg-indigo-50/10 dark:bg-indigo-950/20 scale-[1.02]" 
+                    : "border-slate-200/60 dark:border-slate-800 hover:border-indigo-500/40 dark:hover:border-indigo-500/40 hover:scale-[1.01]"
+                }`}
+                id="card-cultura"
+                title="Clique para filtrar por Sociocultural"
+              >
+                {selectedSolicitante === "CULTURA E LAZER" && (
+                  <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-bl-lg tracking-wider">
+                    Filtro Ativo
+                  </div>
+                )}
                 <div className="flex justify-between items-start">
                   <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest font-display">Sociocultural</span>
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/25 dark:text-indigo-400 border border-indigo-500/25">
@@ -601,7 +830,21 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
               </div>
 
               {/* Card 3: Mobilidade */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between hover:border-sky-500/30 dark:hover:border-sky-500/30 transition-all shadow-sm" id="card-mobilidade">
+              <div 
+                onClick={() => handleSelectSolicitante(selectedSolicitante === "MOBILIDADE" ? null : "MOBILIDADE")}
+                className={`bg-white dark:bg-slate-900 border p-5 rounded-2xl flex flex-col justify-between transition-all duration-200 shadow-sm cursor-pointer select-none relative overflow-hidden ${
+                  selectedSolicitante === "MOBILIDADE" 
+                    ? "border-sky-500 ring-4 ring-sky-500/10 dark:ring-sky-500/20 bg-sky-50/10 dark:bg-sky-950/20 scale-[1.02]" 
+                    : "border-slate-200/60 dark:border-slate-800 hover:border-sky-500/40 dark:hover:border-sky-500/40 hover:scale-[1.01]"
+                }`}
+                id="card-mobilidade"
+                title="Clique para filtrar por Mobilidade"
+              >
+                {selectedSolicitante === "MOBILIDADE" && (
+                  <div className="absolute top-0 right-0 bg-sky-500 text-white text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-bl-lg tracking-wider">
+                    Filtro Ativo
+                  </div>
+                )}
                 <div className="flex justify-between items-start">
                   <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest font-display">Mobilidade</span>
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/10 text-sky-600 dark:bg-sky-500/20 dark:text-sky-400 border border-sky-500/25">
@@ -620,7 +863,21 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
               </div>
 
               {/* Card 4: Espaços Públicos */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between hover:border-amber-500/30 dark:hover:border-amber-500/30 transition-all shadow-sm" id="card-espacos">
+              <div 
+                onClick={() => handleSelectSolicitante(selectedSolicitante === "ESPAÇOS PÚBLICOS" ? null : "ESPAÇOS PÚBLICOS")}
+                className={`bg-white dark:bg-slate-900 border p-5 rounded-2xl flex flex-col justify-between transition-all duration-200 shadow-sm cursor-pointer select-none relative overflow-hidden ${
+                  selectedSolicitante === "ESPAÇOS PÚBLICOS" 
+                    ? "border-amber-500 ring-4 ring-amber-500/10 dark:ring-amber-500/20 bg-amber-50/10 dark:bg-amber-950/20 scale-[1.02]" 
+                    : "border-slate-200/60 dark:border-slate-800 hover:border-amber-500/40 dark:hover:border-amber-500/40 hover:scale-[1.01]"
+                }`}
+                id="card-espacos"
+                title="Clique para filtrar por Espaços Públicos"
+              >
+                {selectedSolicitante === "ESPAÇOS PÚBLICOS" && (
+                  <div className="absolute top-0 right-0 bg-amber-500 text-white text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-bl-lg tracking-wider">
+                    Filtro Ativo
+                  </div>
+                )}
                 <div className="flex justify-between items-start">
                   <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest font-display">Espaços Públicos</span>
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 border border-amber-500/25">
@@ -637,26 +894,59 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                   <div className="bg-amber-500 h-full" style={{ width: `${data.solicitantes["ESPAÇOS PÚBLICOS"]?.pct || 5.6}%` }}></div>
                 </div>
               </div>
-
             </div>
 
             {/* Core Charts Area */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
               {/* Chart 1: Volumetric Line Chart of Weeks */}
-              <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm" id="chart-week-container">
-                <div className="md:flex md:items-center md:justify-between mb-4">
+              <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm animate-fade-in" id="chart-week-container">
+                <div className="md:flex md:items-center md:justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800/80">
                   <div>
-                    <h3 className="font-display font-semibold text-sm text-slate-900 dark:text-white">Registros Semanais de Atendimento</h3>
+                    <h3 className="font-display font-semibold text-xs sm:text-sm text-slate-900 dark:text-white">Registros Semanais de Atendimento</h3>
                     <p className="text-[10px] text-slate-400">Distribuição quantitativa das equipes por dia da semana</p>
                   </div>
-                  <div className="mt-2 md:mt-0 px-2.5 py-1 rounded bg-indigo-500/10 text-indigo-650 dark:text-indigo-400 text-[10px] font-semibold border border-indigo-500/20">
-                    Pico de campo: Segunda-Feira
+                  <div className="flex flex-wrap items-center gap-1 mt-2.5 md:mt-0">
+                    {[{ key: "Dom", label: "Dom" }, { key: "Seg", label: "Seg" }, { key: "Ter", label: "Ter" }, { key: "Qua", label: "Qua" }, { key: "Qui", label: "Qui" }, { key: "Sex", label: "Sex" }, { key: "Sáb", label: "Sáb" }].map((day) => {
+                      const isSelected = selectedDiaSemana === day.key;
+                      return (
+                        <button
+                          key={day.key}
+                          onClick={() => handleSelectDiaSemana(isSelected ? null : day.key)}
+                          className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all border cursor-pointer select-none ${
+                            isSelected 
+                              ? "bg-indigo-600 dark:bg-indigo-500 text-white border-indigo-500 shadow-sm font-extrabold" 
+                              : "bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900"
+                          }`}
+                        >
+                          {day.label}
+                        </button>
+                      );
+                    })}
+                    {selectedDiaSemana && (
+                      <button
+                        onClick={() => handleSelectDiaSemana(null)}
+                        className="px-2 py-0.5 text-[10px] font-extrabold text-red-500 hover:text-red-650 dark:text-red-400 transition-colors uppercase cursor-pointer"
+                        title="Limpar filtro de dia da semana"
+                      >
+                        × Limpar
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={data.diasSemana} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <AreaChart 
+                      data={data.diasSemana} 
+                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                      onClick={(evt) => {
+                        if (evt && evt.activeLabel) {
+                          const labelStr = String(evt.activeLabel);
+                          handleSelectDiaSemana(selectedDiaSemana === labelStr ? null : labelStr);
+                        }
+                      }}
+                      style={{ cursor: "pointer" }}
+                    >
                       <defs>
                         <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25}/>
@@ -683,14 +973,35 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
 
               {/* Chart 2: Doughnut / Bar Distribution of Categories */}
               <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm" id="chart-categories-container">
-                <div>
-                  <h3 className="font-display font-semibold text-sm text-slate-900 dark:text-white">Atuação por Grupo de Demanda</h3>
-                  <p className="text-[10px] text-slate-400">Classificação estatística das solicitações</p>
+                <div className="pb-3 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-display font-semibold text-sm text-slate-900 dark:text-white">Atuação por Grupo de Demanda</h3>
+                    <p className="text-[10px] text-slate-400">Clique nas barras ou nos cards acima para filtrar</p>
+                  </div>
+                  {selectedSolicitante && (
+                    <button
+                      onClick={() => handleSelectSolicitante(null)}
+                      className="px-2 py-0.5 text-[10px] font-extrabold text-red-500 hover:text-red-650 dark:text-red-400 transition-colors uppercase cursor-pointer"
+                    >
+                      × Remover
+                    </button>
+                  )}
                 </div>
                 
                 <div className="h-64 mt-4">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={solicitantesChartData} layout="vertical" margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                    <BarChart 
+                      data={solicitantesChartData} 
+                      layout="vertical" 
+                      margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+                      onClick={(evt) => {
+                        if (evt && evt.activeLabel) {
+                          const clickedCategory = String(evt.activeLabel).toUpperCase();
+                          handleSelectSolicitante(selectedSolicitante === clickedCategory ? null : clickedCategory);
+                        }
+                      }}
+                      style={{ cursor: "pointer" }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={isDark ? "#1e293b" : "#f1f5f9"} />
                       <XAxis type="number" stroke={isDark ? "#475569" : "#94a3b8"} fontSize={9} tickLine={false} />
                       <YAxis dataKey="name" type="category" stroke={isDark ? "#475569" : "#94a3b8"} fontSize={9} tickLine={false} width={80} />
@@ -819,7 +1130,7 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                       return (
                         <div 
                           key={b.nome}
-                          onClick={() => setSelectedBairro(isSelected ? null : b.nome)}
+                          onClick={() => handleSelectBairro(isSelected ? null : b.nome)}
                           className={`flex items-center justify-between p-2.5 rounded-xl transition-all border cursor-pointer ${
                             isSelected 
                               ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-900 dark:text-indigo-200 shadow-sm" 
@@ -876,7 +1187,7 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                       Filtrado por: <span className="text-indigo-600 dark:text-indigo-400 font-extrabold uppercase bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/15 ml-1">{selectedBairro}</span>
                     </span>
                     <button 
-                      onClick={() => setSelectedBairro(null)}
+                      onClick={() => handleSelectBairro(null)}
                       className="text-slate-400 hover:text-red-500 dark:hover:text-red-400 font-bold transition-colors text-xs"
                       title="Remover filtro de bairro"
                     >
@@ -1240,6 +1551,32 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                 </div>
               </div>
 
+              {/* BI Executive Report Card */}
+              <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-950 border border-indigo-500/20 p-6 rounded-2xl shadow-xl text-white" id="bi-executive-report-card">
+                <div className="flex items-center space-x-2.5 mb-3">
+                  <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                    <Sparkles className="w-4 h-4 animate-pulse" />
+                  </div>
+                  <h3 className="font-display font-semibold text-xs tracking-wide text-indigo-100">Análise de BI & Relatório A4</h3>
+                </div>
+                <p className="text-[10px] text-slate-300 leading-relaxed mb-4">
+                  Transforme os dados brutos operacionais e KPIs da CTTU em um relatório executivo formal, estruturado estritamente para conversão e exportação para PDF tamanho A4.
+                </p>
+
+                <button 
+                  onClick={generateBIExecutiveReport}
+                  disabled={isAiLoading}
+                  className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-550 active:scale-[0.98] transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center space-x-1.5 border border-indigo-400/20 cursor-pointer"
+                >
+                  {isAiLoading ? (
+                    <div className="animate-spin rounded-full h-3 w-3 border-b border-white"></div>
+                  ) : (
+                    <Brain className="w-3.5 h-3.5" />
+                  )}
+                  <span>Compilar Relatório Executivo BI</span>
+                </button>
+              </div>
+
               {/* Ask custom planning question */}
               <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm" id="custom-ask-card">
                 <div className="flex items-center space-x-2.5 mb-3">
@@ -1276,12 +1613,40 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
                   <h3 className="font-display font-semibold text-sm text-slate-900 dark:text-slate-100">Diretrizes de Campo da IA</h3>
                   <p className="text-[10px] text-slate-400 font-medium">Recomendações técnicas geradas em tempo real sob fundamentação dos dados do Recife</p>
                 </div>
-                {isAiLoading && (
-                  <span className="flex h-3.5 w-3.5 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-sky-500"></span>
-                  </span>
-                )}
+                <div className="flex items-center space-x-3">
+                  {!isAiLoading && aiReport && (
+                    <button
+                      onClick={() => {
+                        const scenarioLabels: Record<string, string> = {
+                          carnaval_recife: "Carnaval de Recife (Operação de Grande Impacto)",
+                          corredor_agamenon: "Corredor Agamenon Magalhães (Saturação de Tráfego)",
+                          corredor_av_norte: "Corredor Av Norte (Gargalo Estrutural / Fluxo)",
+                          abdias_carvalho: "Av Eng Abdias de Carvalho (Apoio Estratégico / Eixo Oeste)"
+                        };
+                        let nameLabel = scenarioLabels[selectedScenario] || "Consulta Operacional";
+                        if (aiReport.includes("RELATÓRIO EXECUTIVO DE DESEMPENHO")) {
+                          nameLabel = "Relatório Executivo de BI";
+                        }
+                        exportToPDF({
+                          aiReport,
+                          scenarioName: nameLabel,
+                          userEmail: "leo.argus1986@gmail.com"
+                        });
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] transition-all flex items-center space-x-1.5 shadow-sm cursor-pointer border border-indigo-700/20"
+                      id="btn-export-pdf"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Exportar Relatório</span>
+                    </button>
+                  )}
+                  {isAiLoading && (
+                    <span className="flex h-3.5 w-3.5 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-sky-500"></span>
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Dynamic scroll text container */}
