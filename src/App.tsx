@@ -14,7 +14,8 @@ import {
   FileText, 
   RefreshCw, 
   Clock, 
-  ArrowRight, 
+  Calendar,
+  ArrowRight,  
   Activity,
   Award,
   ShieldCheck,
@@ -507,7 +508,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
       atendimentos: info.count,
       porcentagem: info.pct
     };
-  });
+  }).sort((a, b) => b.atendimentos - a.atendimentos);
 
   const turnosChartData = [
     { label: "Manhã", total: data?.periodos?.MANHÃ?.total || 0 },
@@ -529,22 +530,22 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h1 className="text-xs font-bold tracking-widest text-slate-900 dark:text-white uppercase font-display">CTTU RECIFE <span className="text-indigo-600 dark:text-indigo-400">v2.6</span></h1>
+                <h1 className="text-xs font-bold tracking-widest text-slate-900 dark:text-white uppercase font-display">CTTU RECIFE</h1>
                 <span className="text-[9px] px-2 py-0.5 rounded-md font-semibold bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-500/25 animate-pulse">
                   Insight Engine Online
                 </span>
               </div>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Orientadores de Trânsito & Mobilidade 2026</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">Orientadores de Trânsito - 2026</p>
             </div>
           </div>
 
           {/* Quick controls with Date Range Pickers */}
           <div className="flex items-center flex-wrap gap-2 sm:gap-4 justify-end">
-            <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-900 p-1.5 px-3 rounded-lg border border-slate-200/50 dark:border-slate-800 focus-within:border-indigo-500/50 transition-all">
-              <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-indigo-400" />
+            <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-900 p-2.5 px-4 rounded-xl border border-slate-200/50 dark:border-slate-800 focus-within:border-indigo-500/50 transition-all shadow-sm">
+              <Calendar className="w-4 h-4 text-slate-400/80 dark:text-indigo-300" />
               
-              <div className="flex items-center space-x-1.5">
-                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">De</span>
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">De</span>
                 <input 
                   type="date" 
                   value={startDate}
@@ -557,14 +558,14 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                       loadStats(false, val, endDate);
                     }
                   }}
-                  className="bg-transparent text-slate-700 dark:text-slate-200 border-none outline-none focus:outline-none focus:ring-0 text-[10px] font-semibold cursor-pointer w-[110px] p-0"
+                  className="bg-transparent text-slate-700 dark:text-slate-200 border-none outline-none focus:outline-none focus:ring-0 text-xs sm:text-xs font-semibold cursor-pointer w-[115px] sm:w-[120px] p-0 [&::-webkit-calendar-picker-indicator]:dark:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:transition-opacity"
                 />
               </div>
 
-              <div className="h-3.5 w-[1px] bg-slate-300 dark:bg-slate-800"></div>
+              <div className="h-4 w-[1px] bg-slate-300 dark:bg-slate-800"></div>
 
-              <div className="flex items-center space-x-1.5">
-                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Até</span>
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Até</span>
                 <input 
                   type="date" 
                   value={endDate}
@@ -577,7 +578,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                       loadStats(false, startDate, val);
                     }
                   }}
-                  className="bg-transparent text-slate-700 dark:text-slate-200 border-none outline-none focus:outline-none focus:ring-0 text-[10px] font-semibold cursor-pointer w-[110px] p-0"
+                  className="bg-transparent text-slate-700 dark:text-slate-200 border-none outline-none focus:outline-none focus:ring-0 text-xs sm:text-xs font-semibold cursor-pointer w-[115px] sm:w-[120px] p-0 [&::-webkit-calendar-picker-indicator]:dark:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:transition-opacity"
                 />
               </div>
             </div>
