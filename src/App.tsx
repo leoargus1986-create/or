@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { 
   Sun, 
   Moon, 
@@ -439,6 +440,8 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
     const found = data?.bairros.find(b => b.nome.trim().toUpperCase() === name.trim().toUpperCase());
     return found || { valor: 0, pos: 99 };
   };
+
+  const activeFiltersHash = `${selectedBairro || 'all'}-${selectedDiaSemana || 'all'}-${selectedSolicitante || 'all'}`;
 
   // Filtering calculations on client-side for dynamic data grids
   const filteredBairros = data?.bairros.filter(b => 
@@ -934,7 +937,13 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                     )}
                   </div>
                 </div>
-                <div className="h-64">
+                <motion.div 
+                  className="h-64"
+                  key={activeFiltersHash}
+                  initial={{ opacity: 0.3, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, ease: "easeOut" }}
+                >
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart 
                       data={data.diasSemana} 
@@ -968,7 +977,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                       <Area type="monotone" dataKey="count" name="Registros" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorCount)" />
                     </AreaChart>
                   </ResponsiveContainer>
-                </div>
+                </motion.div>
               </div>
 
               {/* Chart 2: Doughnut / Bar Distribution of Categories */}
@@ -988,7 +997,13 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                   )}
                 </div>
                 
-                <div className="h-64 mt-4">
+                <motion.div 
+                  className="h-64 mt-4"
+                  key={activeFiltersHash}
+                  initial={{ opacity: 0.3, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, ease: "easeOut" }}
+                >
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart 
                       data={solicitantesChartData} 
@@ -1032,13 +1047,19 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
-                </div>
+                </motion.div>
               </div>
 
             </div>
 
             {/* Qualitative analysis indicators */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <motion.div 
+              className="grid grid-cols-1 md:grid-cols-3 gap-4"
+              key={activeFiltersHash}
+              initial={{ opacity: 0.4, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+            >
               
               {/* Preventive Character indicators */}
               <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between shadow-sm" id="ind-preventivo">
@@ -1072,7 +1093,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                     Bairro do {data.bairros[0]?.nome || "RECIFE"}
                   </h4>
                   <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                    {data.bairros[0]?.valor || 990} registros compilados no Bairro Histórico sob coordenação ativa.
+                    {data.bairros[0]?.valor || 990} registros compilados no Bairro Histórico sob coordenação activa.
                   </p>
                 </div>
               </div>
@@ -1091,7 +1112,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                 </div>
               </div>
 
-            </div>
+            </motion.div>
 
           </div>
         )}
@@ -1123,40 +1144,48 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                 </div>
 
                 {/* Scroller Area */}
-                <div className="overflow-y-auto max-h-96 pr-1 mt-4 space-y-1">
-                  {filteredBairros.length > 0 ? (
-                    filteredBairros.map((b) => {
-                      const isSelected = selectedBairro?.trim().toUpperCase() === b.nome.trim().toUpperCase();
-                      return (
-                        <div 
-                          key={b.nome}
-                          onClick={() => handleSelectBairro(isSelected ? null : b.nome)}
-                          className={`flex items-center justify-between p-2.5 rounded-xl transition-all border cursor-pointer ${
-                            isSelected 
-                              ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-900 dark:text-indigo-200 shadow-sm" 
-                              : "hover:bg-slate-50 dark:hover:bg-slate-950/60 border-transparent hover:border-slate-100 dark:hover:border-slate-800/50"
-                          }`}
-                        >
-                          <div className="flex items-center space-x-3">
-                            <span className="text-[10px] font-semibold text-slate-450 dark:text-slate-500 w-5">#{b.pos}</span>
-                            <span className="text-xs font-bold uppercase tracking-wide">{b.nome}</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs font-extrabold text-slate-900 dark:text-slate-150">{b.valor}</span>
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold border ${
+                <div className="overflow-y-auto max-h-96 pr-1 mt-4">
+                  <motion.div 
+                    className="space-y-1"
+                    key={activeFiltersHash}
+                    initial={{ opacity: 0.4, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                  >
+                    {filteredBairros.length > 0 ? (
+                      filteredBairros.map((b) => {
+                        const isSelected = selectedBairro?.trim().toUpperCase() === b.nome.trim().toUpperCase();
+                        return (
+                          <div 
+                            key={b.nome}
+                            onClick={() => handleSelectBairro(isSelected ? null : b.nome)}
+                            className={`flex items-center justify-between p-2.5 rounded-xl transition-all border cursor-pointer ${
                               isSelected 
-                                ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-600 dark:text-indigo-400" 
-                                : "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/10"
-                            }`}>
-                              {((b.valor / data.recordCount) * 100).toFixed(1)}%
-                            </span>
+                                ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-900 dark:text-indigo-200 shadow-sm" 
+                                : "hover:bg-slate-50 dark:hover:bg-slate-950/60 border-transparent hover:border-slate-100 dark:hover:border-slate-800/50"
+                            }`}
+                          >
+                            <div className="flex items-center space-x-3">
+                              <span className="text-[10px] font-semibold text-slate-450 dark:text-slate-500 w-5">#{b.pos}</span>
+                              <span className="text-xs font-bold uppercase tracking-wide">{b.nome}</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs font-extrabold text-slate-900 dark:text-slate-150">{b.valor}</span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold border ${
+                                isSelected 
+                                  ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-600 dark:text-indigo-400" 
+                                  : "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/10"
+                              }`}>
+                                {((b.valor / data.recordCount) * 100).toFixed(1)}%
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="text-xs text-slate-400 py-6 text-center">Nenhum bairro localizado com este filtro.</p>
-                  )}
+                        );
+                      })
+                    ) : (
+                      <p className="text-xs text-slate-400 py-6 text-center">Nenhum bairro localizado com este filtro.</p>
+                    )}
+                  </motion.div>
                 </div>
               </div>
             </div>
@@ -1197,27 +1226,35 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                 )}
 
                 {/* Scroller Area */}
-                <div className="overflow-y-auto max-h-96 pr-1 mt-4 space-y-1">
-                  {filteredEnderecos.length > 0 ? (
-                    filteredEnderecos.map((e) => (
-                      <div 
-                        key={e.local}
-                        className="flex items-center justify-between p-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-950/60 transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-800/50"
-                      >
-                        <div className="flex items-center space-x-3 truncate max-w-[80%]">
-                          <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 w-5">#{e.pos}</span>
-                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate" title={e.local}>
-                            {e.local}
+                <div className="overflow-y-auto max-h-96 pr-1 mt-4">
+                  <motion.div 
+                    className="space-y-1"
+                    key={activeFiltersHash}
+                    initial={{ opacity: 0.4, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                  >
+                    {filteredEnderecos.length > 0 ? (
+                      filteredEnderecos.map((e) => (
+                        <div 
+                          key={e.local}
+                          className="flex items-center justify-between p-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-950/60 transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-800/50"
+                        >
+                          <div className="flex items-center space-x-3 truncate max-w-[80%]">
+                            <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 w-5">#{e.pos}</span>
+                            <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate" title={e.local}>
+                              {e.local}
+                            </span>
+                          </div>
+                          <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 min-w-10 text-center">
+                            {e.valor}
                           </span>
                         </div>
-                        <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 min-w-10 text-center">
-                          {e.valor}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-xs text-slate-400 py-6 text-center">Nenhum cruzamento mapeado correspondente.</p>
-                  )}
+                      ))
+                    ) : (
+                      <p className="text-xs text-slate-400 py-6 text-center">Nenhum cruzamento mapeado correspondente.</p>
+                    )}
+                  </motion.div>
                 </div>
               </div>
             </div>
@@ -1270,7 +1307,13 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                   <p className="text-[11px] text-slate-400">Distribuição quantitativa de turnos para combater picos</p>
                 </div>
 
-                <div className="h-32 mt-4">
+                <motion.div 
+                  className="h-32 mt-4"
+                  key={activeFiltersHash}
+                  initial={{ opacity: 0.3, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, ease: "easeOut" }}
+                >
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={turnosChartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#1e293b" : "#f1f5f9"} />
@@ -1285,7 +1328,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
-                </div>
+                </motion.div>
               </div>
 
             </div>
