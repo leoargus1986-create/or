@@ -275,7 +275,10 @@ function processAnalytics(rows: string[][]): DashboardData {
   for (const row of dataRows) {
     const dataStr = row[0] || "";
     const solicitanteCol = (row[2] || "OUTRO").trim().toUpperCase();
-    const bairroCol = (row[3] || "OUTRO").trim().toUpperCase();
+    let bairroCol = (row[3] || "OUTRO").trim().toUpperCase();
+    if (bairroCol === "RECEITA" || bairroCol === "RECEITA DA PENHA" || bairroCol === "BAIRRO DO RECIFE") {
+      bairroCol = "RECIFE";
+    }
     const enderecoCol = (row[4] || "OUTRO").trim();
     const complementCol = row[5] || "";
     const efetivoCol = (row[7] || "").trim().toUpperCase();
