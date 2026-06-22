@@ -45,12 +45,34 @@ interface DashboardData {
   solicitantes: Record<string, { count: number; pct: number }>;
   bairros: Array<{ pos: number; nome: string; valor: number }>;
   enderecos: Array<{ pos: number; local: string; valor: number; bairro?: string }>;
-  efetivos: Array<{ rank: number; nome: string; cargo: string; escala: string; valor: number }>;
+  efetivos: Array<{ rank: number; nome: string; cargo: string; escala: string; valor: number; foto?: string }>;
   periodos: Record<string, { total: number; fixo: number; moto: number }>;
   diasSemana: Array<{ label: string; count: number }>;
   mensal: Array<{ label: string; count: number }>;
   preventivoVsCorretivo: { preventivo: number; corretivo: number };
 }
+
+const getAgentPhoto = (nome: string, dynamicPhotoUrl?: string) => {
+  if (dynamicPhotoUrl && dynamicPhotoUrl.trim() !== "" && dynamicPhotoUrl.startsWith("http")) {
+    return dynamicPhotoUrl;
+  }
+  const nameLower = nome.toLowerCase();
+  if (nameLower.includes("josé c") || nameLower.includes("jose c")) return "https://i.pravatar.cc/150?img=11";
+  if (nameLower.includes("ubirajara")) return "https://i.pravatar.cc/150?img=12";
+  if (nameLower.includes("elias")) return "https://i.pravatar.cc/150?img=13";
+  if (nameLower.includes("erikles") || nameLower.includes("adriano")) return "https://i.pravatar.cc/150?img=14";
+  if (nameLower.includes("jakson") || nameLower.includes("jackson") || nameLower.includes("arruda")) return "https://i.pravatar.cc/150?img=15";
+  if (nameLower.includes("marcos")) return "https://i.pravatar.cc/150?img=16";
+  if (nameLower.includes("pedro")) return "https://i.pravatar.cc/150?img=68";
+  
+  // Dynamically assign based on name char codes if none match
+  let hash = 0;
+  for (let i = 0; i < nome.length; i++) {
+    hash = nome.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const imgId = Math.abs(hash % 70) + 1;
+  return `https://i.pravatar.cc/150?img=${imgId}`;
+};
 
 // Custom tooltip for turnos/periodos analysis
 const CustomTurnTooltip = ({ active, payload }: any) => {
@@ -149,8 +171,15 @@ export default function App() {
       if (!res.ok) throw new Error("Não foi possível carregar dados estruturados.");
       const payload: DashboardData = await res.json();
       setData(payload);
-      // Keep selection clean/empty as requested by the user
-      setSelectedAgentIndex(null);
+      // Automatically select Pedro Silva or the top ranking agent to showcase the card on load
+      if (payload.efetivos && payload.efetivos.length > 0) {
+        const defaultIndex = payload.efetivos.findIndex(
+          emp => emp.nome.toUpperCase().includes("PEDRO SILVA") || emp.rank === 1
+        );
+        setSelectedAgentIndex(defaultIndex !== -1 ? defaultIndex : 0);
+      } else {
+        setSelectedAgentIndex(null);
+      }
     } catch (err: any) {
       setError(err.message || "Erro de conexão com o painel.");
     } finally {
@@ -1396,7 +1425,20 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                                   {a.rank}
                                 </span>
                               </td>
-                              <td className="py-3 px-2 font-semibold text-slate-850 dark:text-slate-100">{a.nome}</td>
+                              <td className="py-2.5 px-2 font-semibold text-slate-850 dark:text-slate-100">
+                                <div className="flex items-center space-x-2.5">
+                                  <div className="relative flex-shrink-0">
+                                    <img 
+                                      src={getAgentPhoto(a.nome, a.foto)} 
+                                      alt={a.nome}
+                                      referrerPolicy="no-referrer"
+                                      className="w-8 h-8 rounded-xl object-cover border border-slate-200 dark:border-slate-800 shadow-sm"
+                                    />
+                                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full"></span>
+                                  </div>
+                                  <span className="truncate max-w-[120px] sm:max-w-[180px]">{a.nome}</span>
+                                </div>
+                              </td>
                               <td className="py-3 px-2 text-slate-500 text-[11px]">{a.cargo}</td>
                               <td className="py-3 px-2 text-center">
                                 <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 font-medium border border-slate-200/40 dark:border-slate-800/50">
@@ -1422,14 +1464,22 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                 {selectedAgent ? (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                      <div className="flex items-center space-x-3">
-                        <div className="h-10 w-10 text-xs text-indigo-600 bg-indigo-500/10 flex items-center justify-center rounded-xl font-bold font-display uppercase border border-indigo-500/20 dark:text-indigo-400 dark:bg-indigo-600/10">
-                          {selectedAgent.nome.charAt(0)}
+                      <div className="flex items-center space-x-3 w-3/4">
+                        {/* AQUI ESTÁ A FOTO DO FUNCIONÁRIO */}
+                        <div className="relative flex-shrink-0">
+                          <img 
+                            src={getAgentPhoto(selectedAgent.nome, selectedAgent.foto)} 
+                            alt={`Foto de ${selectedAgent.nome}`}
+                            referrerPolicy="no-referrer"
+                            className="w-14 h-14 rounded-xl object-cover border-2 border-indigo-500/30 shadow-md"
+                          />
+                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full animate-pulse"></div>
                         </div>
-                        <div>
-                          <span className="text-[8px] text-indigo-500 dark:text-indigo-450 uppercase font-semibold tracking-wider block">Orientador Selecionado</span>
-                          <h4 className="text-xs font-bold text-slate-900 dark:text-white leading-tight uppercase">{selectedAgent.nome}</h4>
-                          <p className="text-[10px] text-slate-400 font-medium">{selectedAgent.cargo}</p>
+                        
+                        <div className="truncate">
+                          <span className="text-[8px] text-indigo-500 dark:text-indigo-450 uppercase font-extrabold tracking-wider block">Orientador Selecionado</span>
+                          <h4 className="text-xs sm:text-xs font-bold text-slate-900 dark:text-white leading-tight uppercase truncate">{selectedAgent.nome}</h4>
+                          <p className="text-[10px] text-slate-400 font-medium truncate">{selectedAgent.cargo}</p>
                         </div>
                       </div>
                       <button 
@@ -1441,35 +1491,38 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                       </button>
                     </div>
 
-                    {/* Metrics detail Grid */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-                        <span className="text-[9px] text-slate-450 dark:text-slate-400 font-display font-semibold uppercase block">Quantidade Atendimentos</span>
-                        <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">{selectedAgent.valor}</p>
+                    {/* Cards de Métricas */}
+                    <div className="grid grid-cols-2 gap-3 pb-1">
+                      <div className="bg-slate-50 dark:bg-[#0a0f1c] p-4 rounded-xl border border-slate-100 dark:border-slate-800/80">
+                        <span className="text-[9px] text-slate-450 dark:text-slate-400 font-display font-medium uppercase tracking-wider block">Quantidade Atendimentos</span>
+                        <p className="text-2xl font-extrabold text-slate-905 dark:text-white mt-2 leading-none">{selectedAgent.valor}</p>
                       </div>
-                      <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 flex flex-col justify-between">
-                        <span className="text-[9px] text-slate-450 dark:text-slate-400 font-display font-semibold uppercase">Desempenho</span>
-                        <span className="text-emerald-500 font-bold text-xs flex items-center">
-                          <TrendingUp className="w-3.5 h-3.5 mr-0.5" />
-                          +{((selectedAgent.valor / (5471 / 15)) * 100).toFixed(0)}%
-                        </span>
+                      <div className="bg-slate-50 dark:bg-[#0a0f1c] p-4 rounded-xl border border-slate-100 dark:border-slate-800/80 flex flex-col justify-between">
+                        <span className="text-[9px] text-slate-450 dark:text-slate-404 font-display font-medium uppercase tracking-wider block">Desempenho</span>
+                        <div className="flex items-center gap-1 text-emerald-505 dark:text-emerald-400 mt-2 leading-none">
+                          <TrendingUp className="w-5 h-5 flex-shrink-0" />
+                          <p className="text-xl font-bold">
+                            +{((selectedAgent.valor / (5471 / 15)) * 105).toFixed(0)}%
+                          </p>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 text-xs space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-slate-450 dark:text-slate-450 text-[11px]">Classificação CTTU:</span>
-                        <strong className="text-indigo-600 dark:text-indigo-400 font-bold uppercase">Top #{selectedAgent.rank} Geral</strong>
+                    {/* Lista de Informações Extras */}
+                    <div className="space-y-3 pb-1 text-xs">
+                      <div className="flex justify-between items-center border-b border-slate-150 dark:border-slate-800 pb-2">
+                        <span className="text-slate-450 dark:text-slate-400">Classificação CTTU:</span>
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400 uppercase">Top #{selectedAgent.rank} Geral</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-450 dark:text-slate-450 text-[11px]">Escala de Horário:</span>
-                        <strong className="text-slate-750 dark:text-slate-350">{selectedAgent.escala}</strong>
+                      <div className="flex justify-between items-center pb-1">
+                        <span className="text-slate-455 dark:text-slate-400">Escala de Horário:</span>
+                        <span className="font-bold text-slate-750 dark:text-slate-250 uppercase">{selectedAgent.escala}</span>
                       </div>
                     </div>
 
                     {/* AI remarks output */}
                     {agentAiResult && (
-                      <div className="bg-indigo-50/50 dark:bg-slate-950/60 p-3.5 rounded-xl border border-indigo-100/50 dark:border-slate-800 text-[11px] leading-relaxed animate-fade-in space-y-1 shadow-inner">
+                      <div className="bg-indigo-50/50 dark:bg-slate-950/60 p-3.5 rounded-xl border border-indigo-100/50 dark:border-slate-800 text-[11px] leading-relaxed animate-fade-in space-y-1 shadow-inner max-h-48 overflow-y-auto custom-scrollbar">
                         <p className="text-indigo-600 dark:text-indigo-400 font-semibold font-display uppercase text-[9px] flex items-center">
                           <Sparkles className="w-3.5 h-3.5 mr-1 animate-pulse" />
                           Parecer de IA (Gemini)
@@ -1481,7 +1534,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                     <button 
                       onClick={() => generateAgentRemarks(selectedAgent.nome, selectedAgent.rank, selectedAgent.valor, selectedAgent.cargo, selectedAgent.escala)}
                       disabled={agentAiLoading}
-                      className="w-full bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white py-2.5 px-4 rounded-xl text-xs font-bold transition-all shadow-lg shadow-indigo-600/10 flex items-center justify-center space-x-1.5"
+                      className="w-full bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white py-3 px-4 rounded-xl text-xs font-bold transition-all shadow-[0_0_15px_rgba(79,70,229,0.25)] hover:shadow-[0_0_20px_rgba(79,70,229,0.45)] flex items-center justify-center space-x-1.5"
                     >
                       {agentAiLoading ? (
                         <>

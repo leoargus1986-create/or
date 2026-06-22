@@ -38,7 +38,7 @@ interface DashboardData {
   solicitantes: Record<string, { count: number; pct: number }>;
   bairros: Array<{ pos: number; nome: string; valor: number }>;
   enderecos: Array<{ pos: number; local: string; valor: number; bairro?: string }>;
-  efetivos: Array<{ rank: number; nome: string; cargo: string; escala: string; valor: number }>;
+  efetivos: Array<{ rank: number; nome: string; cargo: string; escala: string; valor: number; foto?: string }>;
   periodos: Record<string, { total: number; fixo: number; moto: number }>;
   diasSemana: Array<{ label: string; count: number }>;
   mensal: Array<{ label: string; count: number }>;
@@ -250,11 +250,22 @@ function processAnalytics(rows: string[][]): DashboardData {
   const headers = rows[0];
   const dataRows = rows.slice(1);
 
+  let photoColIndex = -1;
+  if (headers) {
+    for (let i = 0; i < headers.length; i++) {
+      const h = (headers[i] || "").toLowerCase().trim();
+      if (h.includes("foto") || h.includes("imagem") || h.includes("photo") || h.includes("img") || h.includes("link") || h.includes("url") || h.includes("avatar")) {
+        photoColIndex = i;
+        break;
+      }
+    }
+  }
+
   const solicitantes: Record<string, number> = {};
   const bairros: Record<string, number> = {};
   const enderecos: Record<string, number> = {};
   const addressToBairro: Record<string, string> = {};
-  const efetivos: Record<string, { count: number; cargo: string; escala: string }> = {};
+  const efetivos: Record<string, { count: number; cargo: string; escala: string; foto?: string }> = {};
   const periodos: Record<string, { total: number; fixo: number; moto: number }> = {
     MANHÃ: { total: 0, fixo: 0, moto: 0 },
     TARDE: { total: 0, fixo: 0, moto: 0 },
@@ -320,6 +331,26 @@ function processAnalytics(rows: string[][]): DashboardData {
     if (efetivoCol && efetivoCol !== "EFETIVO" && efetivoCol !== "TOTAL") {
       const record = efetivos[efetivoCol] || { count: 0, cargo: funcaoCol, escala: etapaCol || "Escala" };
       record.count++;
+      
+      let rowPhoto = "";
+      if (photoColIndex !== -1 && row[photoColIndex]) {
+        const cellVal = row[photoColIndex].trim();
+        if (cellVal.startsWith("http://") || cellVal.startsWith("https://")) {
+          rowPhoto = cellVal;
+        }
+      }
+      if (!rowPhoto) {
+        for (const cell of row) {
+          if (cell && (cell.startsWith("http://") || cell.startsWith("https://"))) {
+            rowPhoto = cell.trim();
+            break;
+          }
+        }
+      }
+      if (rowPhoto && !record.foto) {
+        record.foto = rowPhoto;
+      }
+      
       efetivos[efetivoCol] = record;
     }
 
@@ -411,7 +442,8 @@ function processAnalytics(rows: string[][]): DashboardData {
       nome: nome.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()),
       cargo: info.cargo,
       escala: info.escala,
-      valor: info.count
+      valor: info.count,
+      foto: info.foto
     }));
 
   const diasOrdenados = [
