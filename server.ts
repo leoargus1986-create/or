@@ -494,12 +494,13 @@ app.get("/api/data", async (req, res) => {
 
   let rows: string[][] | null = null;
 
-  // Utilize cache if fresh and available
-  if (cachedRows && !forceReload && (now - lastFetchTime < 3600000)) {
+  // Utilize cache if fresh and available (30 seconds cache for real-time responsiveness)
+  if (cachedRows && !forceReload && (now - lastFetchTime < 30000)) {
     rows = cachedRows;
   } else {
     try {
-      const fetchResponse = await fetch(SHEETS_CSV_URL);
+      const cacheBustUrl = `${SHEETS_CSV_URL}&t=${now}`;
+      const fetchResponse = await fetch(cacheBustUrl);
       if (!fetchResponse.ok) {
         throw new Error(`Exfalha ao obter CSV: ${fetchResponse.statusText}`);
       }

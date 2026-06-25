@@ -35,6 +35,8 @@ import {
   ResponsiveContainer, 
   BarChart, 
   Bar, 
+  PieChart,
+  Pie,
   Cell,
   Legend
 } from "recharts";
@@ -53,10 +55,24 @@ interface DashboardData {
 }
 
 const getAgentPhoto = (nome: string, dynamicPhotoUrl?: string) => {
+  const nameLower = nome.toLowerCase();
+
+  // Hardcoded overrides for specific users provided by user
+  if (nameLower.includes("abimael lucas")) {
+    return "https://lh3.googleusercontent.com/d/1W4J7pW_48mxBxcHG7UokPXvG-QTr2bdd";
+  }
+  if (nameLower.includes("adailton albertino")) {
+    return "https://lh3.googleusercontent.com/d/184l4pbaacBPDQc46itYkfow8ZSP3xFtx";
+  }
+
   if (dynamicPhotoUrl && dynamicPhotoUrl.trim() !== "" && dynamicPhotoUrl.startsWith("http")) {
+    // Handle Google Drive links
+    if (dynamicPhotoUrl.includes('drive.google.com')) {
+      const fileId = dynamicPhotoUrl.match(/[-\w]{25,}/);
+      if (fileId) return `https://lh3.googleusercontent.com/d/${fileId[0]}`;
+    }
     return dynamicPhotoUrl;
   }
-  const nameLower = nome.toLowerCase();
   if (nameLower.includes("josé c") || nameLower.includes("jose c")) return "https://i.pravatar.cc/150?img=11";
   if (nameLower.includes("ubirajara")) return "https://i.pravatar.cc/150?img=12";
   if (nameLower.includes("elias")) return "https://i.pravatar.cc/150?img=13";
@@ -1144,6 +1160,105 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
 
             </motion.div>
 
+            {/* New Section: Efetivo Highlights (Imported from Agentes Tab) */}
+            <motion.div 
+              className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+            >
+              {/* Card A: Modalidade */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm flex flex-col justify-between hover:border-indigo-500/30 transition-all">
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 bg-indigo-500/10 text-indigo-500 rounded-lg">
+                      <Users className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest font-display">Resumo do Efetivo</span>
+                  </div>
+                  <h3 className="font-display font-semibold text-lg text-slate-900 dark:text-white mt-3">Modalidade Operacional</h3>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    Divisão tática entre equipes móveis com motoviaturas e equipes de presença fixa em cruzamento.
+                  </p>
+                </div>
+                <div className="flex items-center justify-around mt-6 pt-6 border-t border-slate-50 dark:border-slate-800/50">
+                  <div className="text-center">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase font-display tracking-tight">Postos Fixos</span>
+                    <p className="text-4xl font-black text-slate-900 dark:text-white mt-1">4.530</p>
+                    <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600">
+                      82% do total
+                    </div>
+                  </div>
+                  <div className="h-16 border-l border-slate-100 dark:border-slate-800"></div>
+                  <div className="text-center">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase font-display tracking-tight">Motopatrulhamento</span>
+                    <p className="text-4xl font-black text-slate-900 dark:text-white mt-1">990</p>
+                    <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-600">
+                      18% do total
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card B: Turnos (Improved Donut Chart) */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm hover:border-indigo-500/30 transition-all">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 bg-amber-500/10 text-amber-500 rounded-lg">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <h3 className="font-display font-semibold text-lg text-slate-900 dark:text-white">Alocação por Turno</h3>
+                  </div>
+                </div>
+                <div className="h-40 relative flex items-center">
+                  <div className="w-1/2 h-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={turnosChartData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={35}
+                          outerRadius={55}
+                          paddingAngle={5}
+                          dataKey="total"
+                        >
+                          {turnosChartData.map((entry, index) => {
+                            const colors = ["#0ea5e9", "#6366f1", "#e0ac28"];
+                            return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} stroke="none" />;
+                          })}
+                        </Pie>
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                            fontSize: '11px'
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {/* Legend Overlay - Larger and clearer */}
+                  <div className="w-1/2 pl-4 flex flex-col space-y-3">
+                    {turnosChartData.map((entry, index) => {
+                      const colors = ["#0ea5e9", "#6366f1", "#e0ac28"];
+                      return (
+                        <div key={entry.label} className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: colors[index % colors.length] }}></div>
+                            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight">{entry.label}</span>
+                          </div>
+                          <span className="text-xs font-black text-slate-900 dark:text-white">{entry.total.toLocaleString()}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
           </div>
         )}
 
@@ -1298,72 +1413,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
         {tab === "efetivo" && (
           <div className="space-y-6 animate-fade-in" id="view-agents">
             
-            {/* Upper Split: Turno allocation stats */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Efetivo mode Distribution (Moto vs Fixo) */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl flex flex-col justify-between shadow-sm">
-                <div>
-                  <span className="text-[9px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest font-display">Modalidade de Escolta</span>
-                  <h3 className="font-display font-semibold text-sm text-slate-900 dark:text-white mt-1">Efetivo Operacional</h3>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                    Divisão tática entre equipes móveis com motoviaturas e equipes de presença fixa em cruzamento.
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-around border-t border-slate-100 dark:border-slate-800/80 mt-6 pt-5">
-                  <div className="text-center">
-                    <span className="text-[10px] text-slate-400 block uppercase font-display">Orientadores Fixos</span>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">4.530</p>
-                    <span className="text-[9px] font-semibold bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/20 mt-1.5 inline-block">
-                      82.1%
-                    </span>
-                  </div>
-                  <div className="h-10 border-l border-slate-200 dark:border-slate-800"></div>
-                  <div className="text-center">
-                    <span className="text-[10px] text-slate-400 block uppercase font-display">Batedores de Moto</span>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">990</p>
-                    <span className="text-[9px] font-semibold bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20 mt-1.5 inline-block">
-                      17.9%
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Turno balance bar chart details */}
-              <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl flex flex-col justify-between shadow-sm">
-                <div>
-                  <h3 className="font-display font-semibold text-sm text-slate-950 dark:text-white">Alocação de Orientadores por Turno</h3>
-                  <p className="text-[11px] text-slate-400">Distribuição quantitativa de turnos para combater picos</p>
-                </div>
-
-                <motion.div 
-                  className="h-32 mt-4"
-                  key={activeFiltersHash}
-                  initial={{ opacity: 0.3, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.35, ease: "easeOut" }}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={turnosChartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#1e293b" : "#f1f5f9"} />
-                      <XAxis dataKey="label" stroke={isDark ? "#475569" : "#94a3b8"} fontSize={10} tickLine={false} />
-                      <YAxis stroke={isDark ? "#475569" : "#94a3b8"} fontSize={10} tickLine={false} />
-                      <Tooltip content={<CustomTurnTooltip />} />
-                      <Bar dataKey="total" radius={[4, 4, 0, 0]} name="Total de Orientadores">
-                        {turnosChartData.map((entry, index) => {
-                          const colors = ["#0ea5e9", "#6366f1", "#8b5cf6"];
-                          return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
-                        })}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </motion.div>
-              </div>
-
-            </div>
-
-            {/* Split Grid: Bottom Left Leaderboard & Bottom Right Performance Assessment Card */}
+            {/* Split Grid: Leaderboard & Performance Assessment Card */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               
               {/* Leaderboard Table (2/3 size) */}
