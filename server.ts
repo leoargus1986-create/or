@@ -529,6 +529,9 @@ app.get("/api/data", async (req, res) => {
     const reqDiaSemana = req.query.diaSemana ? String(req.query.diaSemana).trim() : undefined;
     const reqBairro = req.query.bairro ? String(req.query.bairro).trim() : undefined;
     const reqSolicitante = req.query.solicitante ? String(req.query.solicitante).trim() : undefined;
+    const reqPeriodo = req.query.periodo ? String(req.query.periodo).trim() : undefined;
+    const reqMode = req.query.mode ? String(req.query.mode).trim() : undefined;
+    const reqCaracter = req.query.caracter ? String(req.query.caracter).trim() : undefined;
 
     // Apply date range and interactive filters if present
     const filteredDataRows = dataRows.filter(row => {
@@ -575,6 +578,40 @@ app.get("/api/data", async (req, res) => {
         if (cleanReq === "SAB.") cleanReq = "SÁB.";
 
         if (normDia !== cleanReq) {
+          return false;
+        }
+      }
+
+      // 4. Periodo filter
+      if (reqPeriodo) {
+        const periodoCol = (row[41] || "OUTRO").trim().toUpperCase();
+        let normPeriodo = "MANHÃ";
+        if (periodoCol.includes("TARDE")) normPeriodo = "TARDE";
+        else if (periodoCol.includes("NOITE")) normPeriodo = "NOITE";
+
+        if (normPeriodo !== reqPeriodo.toUpperCase()) {
+          return false;
+        }
+      }
+
+      // 5. Mode filter (Fixo vs Moto)
+      if (reqMode) {
+        const motociclistaCol = row[31] || "";
+        const isMoto = motociclistaCol.trim() !== "";
+        const targetIsMoto = reqMode.toUpperCase() === "MOTO" || reqMode.toUpperCase() === "MOTORIZADO";
+        
+        if (isMoto !== targetIsMoto) {
+          return false;
+        }
+      }
+
+      // 6. Caracter filter (Preventivo vs Corretivo)
+      if (reqCaracter) {
+        const normalizedSolicitante = (row[2] || "").trim().toUpperCase();
+        const isCorretiva = !normalizedSolicitante || row[18] === "CORRETIVAS" || (row[18] && row[18].trim() !== "");
+        const targetIsCorretiva = reqCaracter.toUpperCase() === "CORRETIVO" || reqCaracter.toUpperCase() === "CORRETIVA";
+        
+        if (isCorretiva !== targetIsCorretiva) {
           return false;
         }
       }

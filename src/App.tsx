@@ -22,7 +22,9 @@ import {
   ChevronRight,
   TrendingDown,
   ThumbsUp,
-  Download
+  Download,
+  Navigation,
+  XCircle
 } from "lucide-react";
 import { exportToPDF } from "./utils/pdfExport";
 import { 
@@ -138,6 +140,9 @@ export default function App() {
   const [selectedBairro, setSelectedBairro] = useState<string | null>(null);
   const [selectedDiaSemana, setSelectedDiaSemana] = useState<string | null>(null);
   const [selectedSolicitante, setSelectedSolicitante] = useState<string | null>(null);
+  const [selectedPeriodo, setSelectedPeriodo] = useState<string | null>(null);
+  const [selectedMode, setSelectedMode] = useState<string | null>(null);
+  const [selectedCaracter, setSelectedCaracter] = useState<string | null>(null);
   const [efetivoFilter, setEfetivoFilter] = useState("");
   const [geoViewMode, setGeoViewMode] = useState<"mapa" | "pontos">("mapa");
   const [isExploded, setIsExploded] = useState(false);
@@ -165,7 +170,10 @@ export default function App() {
     end = endDate,
     diaSemana = selectedDiaSemana,
     solicitante = selectedSolicitante,
-    bairro = selectedBairro
+    bairro = selectedBairro,
+    periodo = selectedPeriodo,
+    mode = selectedMode,
+    caracter = selectedCaracter
   ) => {
     if (reload) setIsRefreshing(true);
     else setIsLoading(true);
@@ -181,6 +189,15 @@ export default function App() {
       }
       if (bairro) {
         url += `&bairro=${encodeURIComponent(bairro)}`;
+      }
+      if (periodo) {
+        url += `&periodo=${encodeURIComponent(periodo)}`;
+      }
+      if (mode) {
+        url += `&mode=${encodeURIComponent(mode)}`;
+      }
+      if (caracter) {
+        url += `&caracter=${encodeURIComponent(caracter)}`;
       }
 
       const res = await fetch(url);
@@ -206,24 +223,42 @@ export default function App() {
 
   const handleSelectBairro = (bairro: string | null) => {
     setSelectedBairro(bairro);
-    loadStats(false, startDate, endDate, selectedDiaSemana, selectedSolicitante, bairro);
+    loadStats(false, startDate, endDate, selectedDiaSemana, selectedSolicitante, bairro, selectedPeriodo, selectedMode);
   };
 
   const handleSelectDiaSemana = (dia: string | null) => {
     setSelectedDiaSemana(dia);
-    loadStats(false, startDate, endDate, dia, selectedSolicitante, selectedBairro);
+    loadStats(false, startDate, endDate, dia, selectedSolicitante, selectedBairro, selectedPeriodo, selectedMode);
   };
 
   const handleSelectSolicitante = (solicitante: string | null) => {
     setSelectedSolicitante(solicitante);
-    loadStats(false, startDate, endDate, selectedDiaSemana, solicitante, selectedBairro);
+    loadStats(false, startDate, endDate, selectedDiaSemana, solicitante, selectedBairro, selectedPeriodo, selectedMode);
+  };
+
+  const handleSelectPeriodo = (periodo: string | null) => {
+    setSelectedPeriodo(periodo);
+    loadStats(false, startDate, endDate, selectedDiaSemana, selectedSolicitante, selectedBairro, periodo, selectedMode);
+  };
+
+  const handleSelectMode = (mode: string | null) => {
+    setSelectedMode(mode);
+    loadStats(false, startDate, endDate, selectedDiaSemana, selectedSolicitante, selectedBairro, selectedPeriodo, mode, selectedCaracter);
+  };
+
+  const handleSelectCaracter = (caracter: string | null) => {
+    setSelectedCaracter(caracter);
+    loadStats(false, startDate, endDate, selectedDiaSemana, selectedSolicitante, selectedBairro, selectedPeriodo, selectedMode, caracter);
   };
 
   const handleClearAllFilters = () => {
     setSelectedBairro(null);
     setSelectedDiaSemana(null);
     setSelectedSolicitante(null);
-    loadStats(false, startDate, endDate, null, null, null);
+    setSelectedPeriodo(null);
+    setSelectedMode(null);
+    setSelectedCaracter(null);
+    loadStats(false, startDate, endDate, null, null, null, null, null, null);
   };
 
   useEffect(() => {
@@ -487,7 +522,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
     return found || { valor: 0, pos: 99 };
   };
 
-  const activeFiltersHash = `${selectedBairro || 'all'}-${selectedDiaSemana || 'all'}-${selectedSolicitante || 'all'}`;
+  const activeFiltersHash = `${selectedBairro || 'all'}-${selectedDiaSemana || 'all'}-${selectedSolicitante || 'all'}-${selectedPeriodo || 'all'}-${selectedMode || 'all'}-${selectedCaracter || 'all'}`;
 
   // Filtering calculations on client-side for dynamic data grids
   const filteredBairros = data?.bairros.filter(b => 
@@ -671,6 +706,114 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
               </span>
               <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Ações Totais</span>
             </div>
+          </div>
+        </div>
+
+        {/* Dashboard Filter Bar (Inspired by Looker Studio) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {/* Bairro Filter */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-3 px-4 rounded-2xl shadow-sm flex flex-col space-y-1 hover:border-indigo-500/30 transition-all">
+            <div className="flex items-center space-x-1.5 opacity-60">
+              <MapPin className="w-3 h-3 text-indigo-500" />
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest font-display">Território (Bairro)</label>
+            </div>
+            <select 
+              value={selectedBairro || ""} 
+              onChange={(e) => handleSelectBairro(e.target.value || null)}
+              className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-100 outline-none cursor-pointer w-full h-7 border-none p-0 focus:ring-0"
+            >
+              <option value="" className="dark:bg-slate-900">Todos os Bairros</option>
+              {data?.bairros.map(b => (
+                <option key={b.nome} value={b.nome} className="dark:bg-slate-900">{b.nome}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Turno Filter */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-3 px-4 rounded-2xl shadow-sm flex flex-col space-y-1 hover:border-indigo-500/30 transition-all">
+            <div className="flex items-center space-x-1.5 opacity-60">
+              <Clock className="w-3 h-3 text-amber-500" />
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest font-display">Período do Dia</label>
+            </div>
+            <div className="flex items-center space-x-1.5 mt-1">
+              {["MANHÃ", "TARDE", "NOITE"].map(p => (
+                <button
+                  key={p}
+                  onClick={() => handleSelectPeriodo(selectedPeriodo === p ? null : p)}
+                  className={`flex-1 text-[9px] py-1.5 rounded-lg font-bold border transition-all ${
+                    selectedPeriodo === p 
+                      ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-500/20" 
+                      : "border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500 hover:border-indigo-500/30 hover:text-indigo-500"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Modalidade Filter */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-3 px-4 rounded-2xl shadow-sm flex flex-col space-y-1 hover:border-indigo-500/30 transition-all">
+            <div className="flex items-center space-x-1.5 opacity-60">
+              <ShieldCheck className="w-3 h-3 text-emerald-500" />
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest font-display">Modalidade Operacional</label>
+            </div>
+            <div className="flex items-center space-x-1.5 mt-1">
+              {[
+                { id: "FIXO", label: "Posto Fixo", icon: <Users className="w-3 h-3" /> },
+                { id: "MOTO", label: "Motorizado", icon: <Navigation className="w-3 h-3" /> }
+              ].map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => handleSelectMode(selectedMode === m.id ? null : m.id)}
+                  className={`flex-1 flex items-center justify-center space-x-1.5 text-[9px] py-1.5 rounded-lg font-bold border transition-all ${
+                    selectedMode === m.id 
+                      ? "bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-500/20" 
+                      : "border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500 hover:border-emerald-500/30 hover:text-emerald-500"
+                  }`}
+                >
+                  {m.icon}
+                  <span>{m.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Clear Filters & Global Stats Toggle */}
+          <div className="flex items-center justify-end space-x-2">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-3 px-4 rounded-2xl shadow-sm flex flex-col space-y-1 hover:border-indigo-500/30 transition-all flex-grow">
+              <div className="flex items-center space-x-1.5 opacity-60">
+                <Brain className="w-3 h-3 text-sky-500" />
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest font-display">Caráter da Ação</label>
+              </div>
+              <div className="flex items-center space-x-1.5 mt-1">
+                {[
+                  { id: "PREVENTIVO", label: "Prev." },
+                  { id: "CORRETIVO", label: "Corr." }
+                ].map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => handleSelectCaracter(selectedCaracter === c.id ? null : c.id)}
+                    className={`flex-1 text-[9px] py-1.5 rounded-lg font-bold border transition-all ${
+                      selectedCaracter === c.id 
+                        ? "bg-sky-600 border-sky-600 text-white shadow-md shadow-sky-500/20" 
+                        : "border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500 hover:border-indigo-500/30 hover:text-indigo-500"
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={handleClearAllFilters}
+              disabled={!selectedBairro && !selectedPeriodo && !selectedMode && !selectedDiaSemana && !selectedSolicitante && !selectedCaracter}
+              className="flex-1 lg:flex-none flex items-center justify-center space-x-2 px-5 py-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-red-500 hover:border-red-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed group h-full"
+            >
+              <XCircle className="w-4 h-4 group-hover:rotate-90 transition-transform" />
+              <span className="hidden sm:inline">Limpar</span>
+            </button>
           </div>
         </div>
 
@@ -1009,8 +1152,8 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#1e293b" : "#f1f5f9"} />
-                      <XAxis dataKey="label" stroke={isDark ? "#475569" : "#94a3b8"} fontSize={10} tickLine={false} />
-                      <YAxis stroke={isDark ? "#475569" : "#94a3b8"} fontSize={10} tickLine={false} />
+                      <XAxis dataKey="label" stroke={isDark ? "#f8fafc" : "#64748b"} fontSize={10} tickLine={false} />
+                      <YAxis stroke={isDark ? "#f8fafc" : "#64748b"} fontSize={10} tickLine={false} />
                       <Tooltip 
                         contentStyle={{ 
                           backgroundColor: isDark ? "#0f172a" : "#ffffff", 
@@ -1026,74 +1169,70 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                 </motion.div>
               </div>
 
-              {/* Chart 2: Doughnut / Bar Distribution of Categories */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm" id="chart-categories-container">
-                <div className="pb-3 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
-                  <div>
-                    <h3 className="font-display font-semibold text-sm text-slate-900 dark:text-white">Atuação por Grupo de Demanda</h3>
-                    <p className="text-[10px] text-slate-400">Clique nas barras ou nos cards acima para filtrar</p>
-                  </div>
-                  {selectedSolicitante && (
-                    <button
-                      onClick={() => handleSelectSolicitante(null)}
-                      className="px-2 py-0.5 text-[10px] font-extrabold text-red-500 hover:text-red-650 dark:text-red-400 transition-colors uppercase cursor-pointer"
-                    >
-                      × Remover
-                    </button>
-                  )}
+              {/* Perfil das Ações Realizadas (Donut Chart) */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm flex flex-col h-auto hover:border-indigo-500/30 transition-all" id="chart-categories-container">
+                <div className="mb-6">
+                  <h3 className="font-display font-bold text-xl text-slate-900 dark:text-white">Perfil das Ações Realizadas</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">Atuação operacional por categoria</p>
                 </div>
-                
-                <motion.div 
-                  className="h-64 mt-4"
-                  key={activeFiltersHash}
-                  initial={{ opacity: 0.3, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.35, ease: "easeOut" }}
-                >
+
+                <div className="h-64 relative">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart 
-                      data={solicitantesChartData} 
-                      layout="vertical" 
-                      margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
-                      onClick={(evt) => {
-                        if (evt && evt.activeLabel) {
-                          const clickedCategory = String(evt.activeLabel).toUpperCase();
-                          handleSelectSolicitante(selectedSolicitante === clickedCategory ? null : clickedCategory);
-                        }
-                      }}
-                      style={{ cursor: "pointer" }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={isDark ? "#1e293b" : "#f1f5f9"} />
-                      <XAxis type="number" stroke={isDark ? "#475569" : "#94a3b8"} fontSize={9} tickLine={false} />
-                      <YAxis dataKey="name" type="category" stroke={isDark ? "#475569" : "#94a3b8"} fontSize={9} tickLine={false} width={80} />
-                      <Tooltip
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: "Presença Estratégica", value: 3500, color: "#3b82f6" },
+                          { name: "Planejadas", value: 2800, color: "#8b5cf6" },
+                          { name: "Educativas", value: 2200, color: "#10b981" },
+                          { name: "Preventivas", value: 450, color: "#f59e0b" },
+                          { name: "Corretivas", value: 650, color: "#ef4444" }
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={85}
+                        paddingAngle={5}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {[
+                          { name: "Presença Estratégica", value: 3500, color: "#3b82f6" },
+                          { name: "Planejadas", value: 2800, color: "#8b5cf6" },
+                          { name: "Educativas", value: 2200, color: "#10b981" },
+                          { name: "Preventivas", value: 450, color: "#f59e0b" },
+                          { name: "Corretivas", value: 650, color: "#ef4444" }
+                        ].map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
                         contentStyle={{ 
                           backgroundColor: isDark ? "#0f172a" : "#ffffff", 
-                          borderColor: isDark ? "#1e293b" : "#e2e8f0" ,
-                          color: isDark ? "#f8fafc" : "#0f172a",
-                          fontSize: 10,
-                          borderRadius: 12
+                          border: "none", 
+                          borderRadius: "12px",
+                          boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
+                          fontSize: "11px"
                         }}
                       />
-                      <Bar dataKey="atendimentos" name="Eventos" radius={[0, 4, 4, 0]}>
-                        {solicitantesChartData.map((entry, index) => {
-                          const nameLower = entry.name.toLowerCase();
-                          let fill = "#6366f1";
-                          if (nameLower.includes("urbano")) {
-                            fill = "#10b981";
-                          } else if (nameLower.includes("cultura") || nameLower.includes("lazer") || nameLower.includes("sociocult")) {
-                            fill = "#6366f1";
-                          } else if (nameLower.includes("mobilidade")) {
-                            fill = "#0ea5e9";
-                          } else if (nameLower.includes("espaço") || nameLower.includes("espaco")) {
-                            fill = "#f59e0b";
-                          }
-                          return <Cell key={`cell-${index}`} fill={fill} />;
-                        })}
-                      </Bar>
-                    </BarChart>
+                    </PieChart>
                   </ResponsiveContainer>
-                </motion.div>
+                </div>
+
+                {/* Legend Overlay - Modern Grid */}
+                <div className="grid grid-cols-2 gap-3 mt-6 pt-6 border-t border-slate-50 dark:border-slate-800/50">
+                  {[
+                    { name: "Presença Estratégica", color: "#3b82f6" },
+                    { name: "Planejadas", color: "#8b5cf6" },
+                    { name: "Educativas", color: "#10b981" },
+                    { name: "Preventivas", color: "#f59e0b" },
+                    { name: "Corretivas", color: "#ef4444" }
+                  ].map((item) => (
+                    <div key={item.name} className="flex items-center space-x-2.5">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></div>
+                      <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">{item.name}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
             </div>
