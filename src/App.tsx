@@ -385,11 +385,11 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ systemPrompt, userQuery: query })
       });
-      if (!res.ok) throw new Error();
       const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error || "Erro na comunicação com o AI.");
       setAiReport(payload.result);
-    } catch {
-      setAiReport("Falha ao simular crise operacional. Verifique o status da chave no painel do AI Studio.");
+    } catch (err: any) {
+      setAiReport(err.message || "Falha ao simular crise operacional.");
     } finally {
       setIsAiLoading(false);
     }
@@ -417,11 +417,11 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ systemPrompt, userQuery })
       });
-      if (!res.ok) throw new Error();
       const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error || "Erro na comunicação com o AI.");
       setAiReport(payload.result);
-    } catch {
-      setAiReport("Erro ao compilar diagnóstico preditivo. Certifique-se de configurar GEMINI_API_KEY.");
+    } catch (err: any) {
+      setAiReport(err.message || "Erro ao compilar diagnóstico preditivo.");
     } finally {
       setIsAiLoading(false);
     }
@@ -441,12 +441,12 @@ Analise o cenário solicitado construindo uma diretiva de emergência com soluç
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ systemPrompt, userQuery: customPrompt })
       });
-      if (!res.ok) throw new Error();
       const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error || "Erro na comunicação com o AI.");
       setAiReport(payload.result);
       setCustomPrompt("");
-    } catch {
-      setAiReport("Erro de comunicação com o assistente inteligente.");
+    } catch (err: any) {
+      setAiReport(err.message || "Erro de comunicação com o assistente inteligente.");
     } finally {
       setIsAiLoading(false);
     }
@@ -1133,7 +1133,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35, ease: "easeOut" }}
                 >
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height={256}>
                     <AreaChart 
                       data={data.diasSemana} 
                       margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
@@ -1177,7 +1177,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                 </div>
 
                 <div className="h-64 relative">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height={256}>
                     <PieChart>
                       <Pie
                         data={[
@@ -1299,104 +1299,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
 
             </motion.div>
 
-            {/* New Section: Efetivo Highlights (Imported from Agentes Tab) */}
-            <motion.div 
-              className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              {/* Card A: Modalidade */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm flex flex-col justify-between hover:border-indigo-500/30 transition-all">
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <div className="p-2 bg-indigo-500/10 text-indigo-500 rounded-lg">
-                      <Users className="w-4 h-4" />
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest font-display">Resumo do Efetivo</span>
-                  </div>
-                  <h3 className="font-display font-semibold text-lg text-slate-900 dark:text-white mt-3">Modalidade Operacional</h3>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                    Divisão tática entre equipes móveis com motoviaturas e equipes de presença fixa em cruzamento.
-                  </p>
-                </div>
-                <div className="flex items-center justify-around mt-6 pt-6 border-t border-slate-50 dark:border-slate-800/50">
-                  <div className="text-center">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase font-display tracking-tight">Postos Fixos</span>
-                    <p className="text-4xl font-black text-slate-900 dark:text-white mt-1">4.530</p>
-                    <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600">
-                      82% do total
-                    </div>
-                  </div>
-                  <div className="h-16 border-l border-slate-100 dark:border-slate-800"></div>
-                  <div className="text-center">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase font-display tracking-tight">Motopatrulhamento</span>
-                    <p className="text-4xl font-black text-slate-900 dark:text-white mt-1">990</p>
-                    <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-600">
-                      18% do total
-                    </div>
-                  </div>
-                </div>
-              </div>
 
-              {/* Card B: Turnos (Improved Donut Chart) */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm hover:border-indigo-500/30 transition-all">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center space-x-2">
-                    <div className="p-2 bg-amber-500/10 text-amber-500 rounded-lg">
-                      <Clock className="w-4 h-4" />
-                    </div>
-                    <h3 className="font-display font-semibold text-lg text-slate-900 dark:text-white">Alocação por Turno</h3>
-                  </div>
-                </div>
-                <div className="h-40 relative flex items-center">
-                  <div className="w-1/2 h-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={turnosChartData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={35}
-                          outerRadius={55}
-                          paddingAngle={5}
-                          dataKey="total"
-                        >
-                          {turnosChartData.map((entry, index) => {
-                            const colors = ["#0ea5e9", "#6366f1", "#e0ac28"];
-                            return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} stroke="none" />;
-                          })}
-                        </Pie>
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: isDark ? '#1e293b' : '#ffffff',
-                            border: 'none',
-                            borderRadius: '8px',
-                            boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                            fontSize: '11px'
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  {/* Legend Overlay - Larger and clearer */}
-                  <div className="w-1/2 pl-4 flex flex-col space-y-3">
-                    {turnosChartData.map((entry, index) => {
-                      const colors = ["#0ea5e9", "#6366f1", "#e0ac28"];
-                      return (
-                        <div key={entry.label} className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: colors[index % colors.length] }}></div>
-                            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tight">{entry.label}</span>
-                          </div>
-                          <span className="text-xs font-black text-slate-900 dark:text-white">{entry.total.toLocaleString()}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
 
           </div>
         )}

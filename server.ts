@@ -638,23 +638,36 @@ app.post("/api/ai/analyze", async (req, res) => {
     return res.status(400).json({ error: "Parâmetros systemPrompt e userQuery são obrigatórios." });
   }
 
-  try {
-    const ai = getGeminiClient();
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: userQuery,
-      config: {
-        systemInstruction: systemPrompt,
-        temperature: 0.4
-      }
-    });
+  // Robust fallback model chain to handle rate limits, deprecations, or high demand
+  const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.5-flash"];
+  let lastError: any = null;
 
-    const answer = response.text || "Sem resposta do modelo.";
-    return res.json({ result: answer });
-  } catch (error: any) {
-    console.error("Erro na API do Gemini:", error.message);
-    return res.status(500).json({ error: error.message || "Erro interno de comunicação com a Inteligência Artificial." });
+  for (const modelName of modelsToTry) {
+    try {
+      console.log(`Tentando gerar análise inteligente com o modelo: ${modelName}`);
+      const ai = getGeminiClient();
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: userQuery,
+        config: {
+          systemInstruction: systemPrompt,
+          temperature: 0.4
+        }
+      });
+
+      const answer = response.text || "Sem resposta do modelo.";
+      console.log(`Sucesso ao gerar análise com o modelo: ${modelName}`);
+      return res.json({ result: answer });
+    } catch (error: any) {
+      console.warn(`Falha na API do Gemini com o modelo ${modelName}:`, error.message || error);
+      lastError = error;
+    }
   }
+
+  console.error("Erro final em todos os modelos do Gemini:", lastError?.message || lastError);
+  return res.status(500).json({ 
+    error: lastError?.message || "Erro de comunicação com a Inteligência Artificial após tentar múltiplos modelos." 
+  });
 });
 
 // API Health Check
