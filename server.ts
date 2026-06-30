@@ -11,6 +11,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSncLt5jGyFnv8AFXn08fMzmlUJv89SykRA0kI__zAiJPor5kzOaMAOQYpBKR7ONBFnZuJSs7atn0AU/pub?gid=1483875192&single=true&output=csv";
+const EFETIVO_FIXO_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0beFtf_BfmH6NytmANk_NensTAYZyeoa9EQIxKyal6uAOEzr50CyjDfdZwUW6NybjnG37PPwVNJHc/pub?gid=1613011165&single=true&output=csv";
 
 // Lazy-loaded Gemini SDK setup
 let aiInstance: GoogleGenAI | null = null;
@@ -109,6 +110,7 @@ function isRowWithinRange(dateStr: string, startDateStr: string | undefined, end
 // Generate high-fidelity synthetic rows corresponding to CTTU 2026 aggregates when offline or on fallback
 function generateMockRows(): string[][] {
   const headers = ["Data", "Bairro Col", "Solicitante", "Bairro", "Endereço", "Complemento", "Fator", "Efetivo", "Função", "Etapa", "Motociclista", "Periodo", "DiaSemana"];
+  headers[31] = "LOCAL";
   const rows: string[][] = [headers];
 
   const solicitantes = [
@@ -207,9 +209,10 @@ function generateMockRows(): string[][] {
     row[8] = a.cargo;
     row[9] = a.escala;
     row[18] = isCorretiva;
-    row[31] = isMoto;
-    row[41] = p.name;
-    row[42] = d.label;
+    row[31] = e.local;
+    row[32] = isMoto;
+    row[42] = p.name;
+    row[43] = d.label;
 
     rows.push(row);
   }
@@ -245,10 +248,40 @@ function parseCSV(csvText: string): string[][] {
   return rows;
 }
 
+function getColumnsMapping(headers: string[]) {
+  const normalized = headers.map(h => (h || "").toUpperCase().trim());
+  const findIndex = (names: string[], fallback: number) => {
+    for (const name of names) {
+      const idx = normalized.indexOf(name);
+      if (idx !== -1) return idx;
+    }
+    return fallback;
+  };
+
+  return {
+    data: findIndex(["DATA"], 0),
+    solicitante: findIndex(["SOLICITANTE"], 2),
+    bairro: findIndex(["BAIRRO"], 3),
+    endereco: findIndex(["ENDEREÇO", "ENDERECO"], 4),
+    complemento: findIndex(["COMPLEMENTO"], 5),
+    efetivo: findIndex(["EFETIVO"], 7),
+    funcao: findIndex(["FUNÇÃO", "FUNCAO"], 8),
+    etapa: findIndex(["ETAPA"], 9),
+    preventivas: findIndex(["PREVENTIVAS"], 18),
+    corretivas: findIndex(["CORRETIVAS"], 19),
+    local: findIndex(["LOCAL"], 31),
+    motociclista: findIndex(["MOTOCICLISTA"], 32),
+    periodo: findIndex(["PERIODO"], 42),
+    diaSemana: findIndex(["DIA_SEMANA"], 43)
+  };
+}
+
 // Aggregation logic that processes raw Rows into refined Analytics
 function processAnalytics(rows: string[][]): DashboardData {
   const headers = rows[0];
   const dataRows = rows.slice(1);
+
+  const mapping = getColumnsMapping(headers);
 
   let photoColIndex = -1;
   if (headers) {
@@ -284,20 +317,21 @@ function processAnalytics(rows: string[][]): DashboardData {
   let numCorretivas = 0;
 
   for (const row of dataRows) {
-    const dataStr = row[0] || "";
-    const solicitanteCol = (row[2] || "OUTRO").trim().toUpperCase();
-    let bairroCol = (row[3] || "OUTRO").trim().toUpperCase();
+    const dataStr = row[mapping.data] || "";
+    const solicitanteCol = (row[mapping.solicitante] || "OUTRO").trim().toUpperCase();
+    let bairroCol = (row[mapping.bairro] || "OUTRO").trim().toUpperCase();
     if (bairroCol === "RECEITA" || bairroCol === "RECEITA DA PENHA" || bairroCol === "BAIRRO DO RECIFE") {
       bairroCol = "RECIFE";
     }
-    const enderecoCol = (row[4] || "OUTRO").trim();
-    const complementCol = row[5] || "";
-    const efetivoCol = (row[7] || "").trim().toUpperCase();
-    const funcaoCol = (row[8] || "ORIENTADOR").trim();
-    const etapaCol = (row[9] || "").trim(); // Escala ex: "3ª M" or "3ª T"
-    const motociclistaCol = row[31] || ""; // Has value if motorizado
-    const periodoCol = (row[41] || "OUTRO").trim().toUpperCase();
-    const diaSemanaCol = (row[42] || "OUTRO").trim().toUpperCase();
+    const localColVal = mapping.local !== -1 ? (row[mapping.local] || "").trim() : "";
+    const enderecoCol = (row[mapping.endereco] || "OUTRO").trim();
+    const complementCol = row[mapping.complemento] || "";
+    const efetivoCol = (row[mapping.efetivo] || "").trim().toUpperCase();
+    const funcaoCol = (row[mapping.funcao] || "ORIENTADOR").trim();
+    const etapaCol = (row[mapping.etapa] || "").trim(); // Escala ex: "3ª M" or "3ª T"
+    const motociclistaCol = row[mapping.motociclista] || ""; // Has value if motorizado
+    const periodoCol = (row[mapping.periodo] || "OUTRO").trim().toUpperCase();
+    const diaSemanaCol = (row[mapping.diaSemana] || "OUTRO").trim().toUpperCase();
 
     // Map Solicitantes to standard categories
     let normalizedSolicitante = "";
@@ -319,8 +353,14 @@ function processAnalytics(rows: string[][]): DashboardData {
     }
 
     // Normalizing Endereços
-    if (enderecoCol && enderecoCol !== "ENDEREÇO") {
-      const fullEnd = complementCol ? `${enderecoCol} - ${complementCol}` : enderecoCol;
+    let fullEnd = "";
+    if (localColVal && localColVal !== "LOCAL") {
+      fullEnd = localColVal;
+    } else if (enderecoCol && enderecoCol !== "ENDEREÇO") {
+      fullEnd = complementCol ? `${enderecoCol} - ${complementCol}` : enderecoCol;
+    }
+
+    if (fullEnd) {
       enderecos[fullEnd] = (enderecos[fullEnd] || 0) + 1;
       if (bairroCol && bairroCol !== "BAIRRO") {
         addressToBairro[fullEnd] = bairroCol;
@@ -394,10 +434,7 @@ function processAnalytics(rows: string[][]): DashboardData {
     }
 
     // Character classification (Preventative vs Corrective)
-    // Services/Mobility/Culture/Spaces can indicate preventives. Corretiva if explicitly logged as corrective
-    // The dataset columns PREVENTIVAS and CORRETIVAS or the solicitante category can determine this.
-    // In our manual parse, let's categorize MOBILIDADE/SERVIÇOS as highly preventive, and look at the actual row
-    const isCorretiva = !normalizedSolicitante || row[18] === "CORRETIVAS" || (row[18] && row[18].trim() !== "");
+    const isCorretiva = row[mapping.corretivas] && row[mapping.corretivas].trim() !== "";
     if (isCorretiva) {
       numCorretivas++;
     } else {
@@ -526,6 +563,8 @@ app.get("/api/data", async (req, res) => {
     const headerRow = rows[0];
     const dataRows = rows.slice(1);
 
+    const mapping = getColumnsMapping(headerRow);
+
     const reqDiaSemana = req.query.diaSemana ? String(req.query.diaSemana).trim() : undefined;
     const reqBairro = req.query.bairro ? String(req.query.bairro).trim() : undefined;
     const reqSolicitante = req.query.solicitante ? String(req.query.solicitante).trim() : undefined;
@@ -535,14 +574,14 @@ app.get("/api/data", async (req, res) => {
 
     // Apply date range and interactive filters if present
     const filteredDataRows = dataRows.filter(row => {
-      const dateStr = row[0] || "";
+      const dateStr = row[mapping.data] || "";
       if (!isRowWithinRange(dateStr, startDate, endDate)) {
         return false;
       }
 
       // 1. Solicitante filter
       if (reqSolicitante) {
-        const solicitanteCol = (row[2] || "OUTRO").trim().toUpperCase();
+        const solicitanteCol = (row[mapping.solicitante] || "OUTRO").trim().toUpperCase();
         let normalizedSolicitante = "";
         if (solicitanteCol.includes("SERVIÇOS URBANOS")) normalizedSolicitante = "SERVIÇOS URBANOS";
         else if (solicitanteCol.includes("CULTURA E LAZER") || solicitanteCol.includes("CULTURA")) normalizedSolicitante = "CULTURA E LAZER";
@@ -556,7 +595,7 @@ app.get("/api/data", async (req, res) => {
 
       // 2. Bairro filter
       if (reqBairro) {
-        let bairroCol = (row[3] || "OUTRO").trim().toUpperCase();
+        let bairroCol = (row[mapping.bairro] || "OUTRO").trim().toUpperCase();
         if (bairroCol === "RECEITA" || bairroCol === "RECEITA DA PENHA" || bairroCol === "BAIRRO DO RECIFE") {
           bairroCol = "RECIFE";
         }
@@ -567,7 +606,7 @@ app.get("/api/data", async (req, res) => {
 
       // 3. Dia da semana filter
       if (reqDiaSemana) {
-        const diaSemanaCol = (row[42] || "OUTRO").trim().toUpperCase();
+        const diaSemanaCol = (row[mapping.diaSemana] || "OUTRO").trim().toUpperCase();
         let normDia = diaSemanaCol;
         if (diaSemanaCol === "SAB.") normDia = "SÁB.";
 
@@ -584,7 +623,7 @@ app.get("/api/data", async (req, res) => {
 
       // 4. Periodo filter
       if (reqPeriodo) {
-        const periodoCol = (row[41] || "OUTRO").trim().toUpperCase();
+        const periodoCol = (row[mapping.periodo] || "OUTRO").trim().toUpperCase();
         let normPeriodo = "MANHÃ";
         if (periodoCol.includes("TARDE")) normPeriodo = "TARDE";
         else if (periodoCol.includes("NOITE")) normPeriodo = "NOITE";
@@ -596,7 +635,7 @@ app.get("/api/data", async (req, res) => {
 
       // 5. Mode filter (Fixo vs Moto)
       if (reqMode) {
-        const motociclistaCol = row[31] || "";
+        const motociclistaCol = row[mapping.motociclista] || "";
         const isMoto = motociclistaCol.trim() !== "";
         const targetIsMoto = reqMode.toUpperCase() === "MOTO" || reqMode.toUpperCase() === "MOTORIZADO";
         
@@ -607,8 +646,8 @@ app.get("/api/data", async (req, res) => {
 
       // 6. Caracter filter (Preventivo vs Corretivo)
       if (reqCaracter) {
-        const normalizedSolicitante = (row[2] || "").trim().toUpperCase();
-        const isCorretiva = !normalizedSolicitante || row[18] === "CORRETIVAS" || (row[18] && row[18].trim() !== "");
+        const normalizedSolicitante = (row[mapping.solicitante] || "").trim().toUpperCase();
+        const isCorretiva = row[mapping.corretivas] && row[mapping.corretivas].trim() !== "";
         const targetIsCorretiva = reqCaracter.toUpperCase() === "CORRETIVO" || reqCaracter.toUpperCase() === "CORRETIVA";
         
         if (isCorretiva !== targetIsCorretiva) {
@@ -627,6 +666,71 @@ app.get("/api/data", async (req, res) => {
   } catch (error: any) {
     console.error("Erro ao processar dados filtrados:", error.message);
     return res.status(500).json({ error: "Erro interno no processamento dos dados." });
+  }
+});
+
+app.get("/api/efetivo-fixo", async (req, res) => {
+  try {
+    const response = await fetch(EFETIVO_FIXO_URL);
+    if (!response.ok) throw new Error("Falha ao buscar dados do efetivo fixo.");
+    const text = await response.text();
+    const lines = text.split("\n");
+    const data: any[] = [];
+
+    function parseCSVLine(line: string) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"' && line[i+1] === '"') {
+          current += '"';
+          i++;
+        } else if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(current);
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current);
+      return result;
+    }
+
+    for (let i = 3; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const cols = parseCSVLine(line);
+      if (cols.length < 10) continue;
+
+      const loc = cols[9].replace(/"/g, "").trim();
+      let lat = null, lng = null;
+      if (loc && loc !== "-") {
+        const parts = loc.split(",");
+        if (parts.length === 2) {
+          lat = parseFloat(parts[0].trim());
+          lng = parseFloat(parts[1].trim());
+        }
+      }
+
+      data.push({
+        nome: cols[2].trim(),
+        cargo: cols[3].trim(),
+        etapa: cols[4].trim(),
+        contato: cols[5].trim(),
+        localApoio: cols[6].trim(),
+        especifico: cols[7].trim(),
+        horario: cols[8].trim(),
+        lat,
+        lng
+      });
+    }
+    res.json(data);
+  } catch (error: any) {
+    console.error("Erro ao carregar escala de efetivo fixo:", error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 

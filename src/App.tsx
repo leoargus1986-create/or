@@ -27,6 +27,7 @@ import {
   XCircle
 } from "lucide-react";
 import { exportToPDF } from "./utils/pdfExport";
+import EfetivoFixoMap from "./components/EfetivoFixoMap";
 import { 
   AreaChart, 
   Area, 
@@ -131,7 +132,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"visao-geral" | "geografia" | "efetivo" | "planejamento-ia">("visao-geral");
+  const [tab, setTab] = useState<"visao-geral" | "geografia" | "efetivo" | "escala-efetivo-fixo" | "planejamento-ia">("visao-geral");
   const [isDark, setIsDark] = useState(true);
 
   // Filter States
@@ -857,6 +858,18 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
               <span>Efetivo de Orientadores</span>
             </button>
             <button 
+              onClick={() => setTab("escala-efetivo-fixo")}
+              className={`pb-4 px-2 text-xs font-semibold tracking-wide transition-all border-b-2 flex items-center space-x-2 ${
+                tab === "escala-efetivo-fixo" 
+                  ? "border-indigo-500 text-indigo-600 dark:text-indigo-400 font-bold" 
+                  : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-800"
+              }`}
+              id="tab-btn-fixed-roster"
+            >
+              <Calendar className="w-4 h-4" />
+              <span>Escala - Efetivo Fixo</span>
+            </button>
+            <button 
               onClick={() => setTab("planejamento-ia")}
               className={`pb-4 px-2 text-xs font-semibold tracking-wide transition-all border-b-2 flex items-center space-x-2 ${
                 tab === "planejamento-ia" 
@@ -1095,8 +1108,8 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
               <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm animate-fade-in" id="chart-week-container">
                 <div className="md:flex md:items-center md:justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800/80">
                   <div>
-                    <h3 className="font-display font-semibold text-xs sm:text-sm text-slate-900 dark:text-white">Registros Semanais de Atendimento</h3>
-                    <p className="text-[10px] text-slate-400">Distribuição quantitativa das equipes por dia da semana</p>
+                    <h3 className="font-display font-semibold text-xs sm:text-sm text-slate-900 dark:text-white">Demandas Semanais de Atendimento</h3>
+                    <p className="text-[10px] text-slate-400">Distribuição quantitativa de demandas por dia da semana</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-1 mt-2.5 md:mt-0">
                     {[{ key: "Dom", label: "Dom" }, { key: "Seg", label: "Seg" }, { key: "Ter", label: "Ter" }, { key: "Qua", label: "Qua" }, { key: "Qui", label: "Qui" }, { key: "Sex", label: "Sex" }, { key: "Sáb", label: "Sáb" }].map((day) => {
@@ -1163,7 +1176,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
                           borderRadius: 12
                         }} 
                       />
-                      <Area type="monotone" dataKey="count" name="Registros" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorCount)" />
+                      <Area type="monotone" dataKey="count" name="Demandas" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorCount)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </motion.div>
@@ -1308,7 +1321,8 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
             TAB COMPONENT 2: ANÁLISE GEOGRÁFICA
         ======================================================= */}
         {tab === "geografia" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in" id="view-geography">
+          <div className="space-y-6 animate-fade-in" id="view-geography">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
             {/* Column A: Bairros list with search */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-6 rounded-2xl shadow-sm" id="geo-bairros-card">
@@ -1447,7 +1461,15 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
             </div>
 
           </div>
-        )}
+
+        </div>
+      )}
+
+      {tab === "escala-efetivo-fixo" && (
+        <div className="space-y-6 animate-fade-in" id="view-escala-efetivo-fixo">
+          <EfetivoFixoMap />
+        </div>
+      )}
 
         {/* =======================================================
             TAB COMPONENT 3: PRODUTIVIDADE DO EFETIVO
