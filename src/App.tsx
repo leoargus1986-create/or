@@ -711,25 +711,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
         </div>
 
         {/* Dashboard Filter Bar (Inspired by Looker Studio) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {/* Bairro Filter */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-3 px-4 rounded-2xl shadow-sm flex flex-col space-y-1 hover:border-indigo-500/30 transition-all">
-            <div className="flex items-center space-x-1.5 opacity-60">
-              <MapPin className="w-3 h-3 text-indigo-500" />
-              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest font-display">Território (Bairro)</label>
-            </div>
-            <select 
-              value={selectedBairro || ""} 
-              onChange={(e) => handleSelectBairro(e.target.value || null)}
-              className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-100 outline-none cursor-pointer w-full h-7 border-none p-0 focus:ring-0"
-            >
-              <option value="" className="dark:bg-slate-900">Todos os Bairros</option>
-              {data?.bairros.map(b => (
-                <option key={b.nome} value={b.nome} className="dark:bg-slate-900">{b.nome}</option>
-              ))}
-            </select>
-          </div>
-
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
           {/* Turno Filter */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-3 px-4 rounded-2xl shadow-sm flex flex-col space-y-1 hover:border-indigo-500/30 transition-all">
             <div className="flex items-center space-x-1.5 opacity-60">
@@ -965,6 +947,31 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
         {tab === "visao-geral" && (
           <div className="space-y-6 animate-fade-in" id="view-overview">
             
+            {/* Filter of Bairro - Beautifully integrated here */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest font-display">Filtro de Território</h4>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 mt-0.5">Refinar análise da Visão Geral por Bairro</p>
+                </div>
+              </div>
+              <div className="w-full md:w-72">
+                <select 
+                  value={selectedBairro || ""} 
+                  onChange={(e) => handleSelectBairro(e.target.value || null)}
+                  className="bg-slate-50 dark:bg-slate-950 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none cursor-pointer w-full h-10 border border-slate-200 dark:border-slate-800 px-3 rounded-xl focus:ring-1 focus:ring-indigo-500/50"
+                >
+                  <option value="" className="dark:bg-slate-900">Todos os Bairros</option>
+                  {data?.bairros.map(b => (
+                    <option key={b.nome} value={b.nome} className="dark:bg-slate-900">{b.nome}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             {/* Summary Metrics Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               
