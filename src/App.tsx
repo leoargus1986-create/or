@@ -542,7 +542,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
     a.nome.toLowerCase().includes(efetivoFilter.toLowerCase())
   ) || [];
 
-  const filteredEfetivos = efetivoFilter ? allFilteredEfetivos : allFilteredEfetivos.slice(0, 15);
+  const filteredEfetivos = allFilteredEfetivos.slice(0, 5);
 
   const selectedAgent = selectedAgentIndex !== null && data ? data.efetivos[selectedAgentIndex] : null;
 
@@ -867,7 +867,7 @@ Efetivo de Motociclistas | ${data?.periodos.MANHÃ.moto || 240} unidades | +8.5%
               id="tab-btn-fixed-roster"
             >
               <Calendar className="w-4 h-4" />
-              <span>Escala - Efetivo Fixo</span>
+              <span>Escala de Serviço</span>
             </button>
             <button 
               onClick={() => setTab("planejamento-ia")}

@@ -8,6 +8,7 @@ export interface EfetivoFixoPosto {
   horario: string;
   lat: number | null;
   lng: number | null;
+  foto?: string;
 }
 
 export const EFETIVO_FIXO_DATA: EfetivoFixoPosto[] = [

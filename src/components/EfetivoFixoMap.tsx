@@ -11,17 +11,76 @@ import {
   Users,
   Layers,
   Sparkles,
-  Info
+  Info,
+  X,
+  User,
+  Camera
 } from "lucide-react";
 import { EFETIVO_FIXO_DATA, EfetivoFixoPosto } from "../data/efetivoFixo";
+
+const getAgentPhoto = (nome: string, dynamicPhotoUrl?: string) => {
+  const nameLower = nome.toLowerCase();
+
+  // Hardcoded overrides for specific users
+  if (nameLower.includes("abimael lucas")) {
+    return "https://lh3.googleusercontent.com/d/1W4J7pW_48mxBxcHG7UokPXvG-QTr2bdd";
+  }
+  if (nameLower.includes("adailton albertino")) {
+    return "https://lh3.googleusercontent.com/d/184l4pbaacBPDQc46itYkfow8ZSP3xFtx";
+  }
+
+  if (dynamicPhotoUrl && dynamicPhotoUrl.trim() !== "" && dynamicPhotoUrl.startsWith("http")) {
+    // Handle Google Drive links
+    if (dynamicPhotoUrl.includes('drive.google.com')) {
+      const fileId = dynamicPhotoUrl.match(/[-\w]{25,}/);
+      if (fileId) return `https://lh3.googleusercontent.com/d/${fileId[0]}`;
+    }
+    return dynamicPhotoUrl;
+  }
+  if (nameLower.includes("josé c") || nameLower.includes("jose c")) return "https://i.pravatar.cc/150?img=11";
+  if (nameLower.includes("ubirajara")) return "https://i.pravatar.cc/150?img=12";
+  if (nameLower.includes("elias")) return "https://i.pravatar.cc/150?img=13";
+  if (nameLower.includes("erikles") || nameLower.includes("adriano")) return "https://i.pravatar.cc/150?img=14";
+  if (nameLower.includes("jakson") || nameLower.includes("jackson") || nameLower.includes("arruda")) return "https://i.pravatar.cc/150?img=15";
+  if (nameLower.includes("marcos")) return "https://i.pravatar.cc/150?img=16";
+  if (nameLower.includes("pedro")) return "https://i.pravatar.cc/150?img=68";
+  
+  // Dynamically assign based on name char codes if none match
+  let hash = 0;
+  for (let i = 0; i < nome.length; i++) {
+    hash = nome.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const imgId = Math.abs(hash % 70) + 1;
+  return `https://i.pravatar.cc/150?img=${imgId}`;
+};
 
 export default function EfetivoFixoMap() {
   const [data, setData] = useState<EfetivoFixoPosto[]>(EFETIVO_FIXO_DATA);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAvenue, setSelectedAvenue] = useState<string>("ALL");
+  const [selectedEtapa, setSelectedEtapa] = useState<string>("ALL");
   const [selectedShift, setSelectedShift] = useState<string>("ALL");
   const [selectedPost, setSelectedPost] = useState<EfetivoFixoPosto | null>(EFETIVO_FIXO_DATA[0]);
+
+  const [photos, setPhotos] = useState<Record<string, string>>(() => {
+    try {
+      const stored = localStorage.getItem("efetivo_fixo_photos");
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const handlePhotoUpload = (nome: string, base64: string) => {
+    const updated = { ...photos, [nome]: base64 };
+    setPhotos(updated);
+    try {
+      localStorage.setItem("efetivo_fixo_photos", JSON.stringify(updated));
+    } catch (err) {
+      console.error("Falha ao salvar foto localmente", err);
+    }
+  };
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -96,6 +155,17 @@ export default function EfetivoFixoMap() {
     return ["ALL", ...Array.from(avenues).sort()];
   }, [data]);
 
+  // Extract unique stages (etapas) for filter dropdown
+  const uniqueEtapas = useMemo(() => {
+    const etapas = new Set<string>();
+    data.forEach(p => {
+      if (p.etapa) {
+        etapas.add(p.etapa.trim());
+      }
+    });
+    return ["ALL", ...Array.from(etapas).sort()];
+  }, [data]);
+
   // Filtered dataset
   const filteredPosts = useMemo(() => {
     return data.filter(p => {
@@ -108,15 +178,19 @@ export default function EfetivoFixoMap() {
       const matchesAvenue = 
         selectedAvenue === "ALL" || 
         p.localApoio === selectedAvenue;
+
+      const matchesEtapa = 
+        selectedEtapa === "ALL" || 
+        p.etapa === selectedEtapa;
       
       const matchesShift = 
         selectedShift === "ALL" || 
         (selectedShift === "MANHA" && p.horario.includes("7 as 13h")) ||
         (selectedShift === "TARDE" && p.horario.includes("19h30"));
 
-      return matchesSearch && matchesAvenue && matchesShift;
+      return matchesSearch && matchesAvenue && matchesEtapa && matchesShift;
     });
-  }, [searchTerm, selectedAvenue, selectedShift]);
+  }, [searchTerm, selectedAvenue, selectedEtapa, selectedShift, data]);
 
   // Statistics for the current view
   const stats = useMemo(() => {
@@ -182,7 +256,7 @@ export default function EfetivoFixoMap() {
             </span>
             <span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-450 uppercase tracking-widest font-display">Relação Nominal e Cartografia</span>
           </div>
-          <h2 className="text-xl font-display font-semibold text-slate-900 dark:text-white mt-1">Campo de Atuação do Efetivo Fixo</h2>
+          <h2 className="text-xl font-display font-semibold text-slate-900 dark:text-white mt-1">Campo de Atuação do Efetivo</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             Escala geral, horários, contatos e georreferenciamento dos Orientadores de Trânsito em Postos Fixos.
           </p>
@@ -208,7 +282,7 @@ export default function EfetivoFixoMap() {
       </div>
 
       {/* Filter and search bar */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800 shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800 shadow-sm">
         
         {/* Search input */}
         <div className="md:col-span-2 relative">
@@ -218,8 +292,17 @@ export default function EfetivoFixoMap() {
             placeholder="Buscar por nome, logradouro, contato..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-50 dark:bg-slate-950/80 border border-slate-200/80 dark:border-slate-800 text-xs py-2.5 pl-9 pr-4 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 dark:text-slate-100"
+            className="w-full bg-slate-50 dark:bg-slate-950/80 border border-slate-200/80 dark:border-slate-800 text-xs py-2.5 pl-9 pr-9 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 dark:text-slate-100"
           />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm("")}
+              className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              title="Limpar busca"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         {/* Avenue dropdown */}
@@ -233,6 +316,21 @@ export default function EfetivoFixoMap() {
             <option value="ALL">Todas as Vias</option>
             {uniqueAvenues.filter(a => a !== "ALL").map(av => (
               <option key={av} value={av}>{av}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Etapa dropdown */}
+        <div className="relative">
+          <Layers className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+          <select
+            value={selectedEtapa}
+            onChange={(e) => setSelectedEtapa(e.target.value)}
+            className="w-full bg-slate-50 dark:bg-slate-950/80 border border-slate-200/80 dark:border-slate-800 text-xs py-2.5 pl-9 pr-3 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 dark:text-slate-100 appearance-none cursor-pointer uppercase font-semibold text-slate-600 dark:text-slate-300"
+          >
+            <option value="ALL">Todas as Etapas</option>
+            {uniqueEtapas.filter(e => e !== "ALL").map(et => (
+              <option key={et} value={et}>{et}</option>
             ))}
           </select>
         </div>
@@ -271,11 +369,12 @@ export default function EfetivoFixoMap() {
                 {filteredPosts.length}
               </span>
             </div>
-            {searchTerm || selectedAvenue !== "ALL" || selectedShift !== "ALL" ? (
+            {searchTerm || selectedAvenue !== "ALL" || selectedEtapa !== "ALL" || selectedShift !== "ALL" ? (
               <button 
                 onClick={() => {
                   setSearchTerm("");
                   setSelectedAvenue("ALL");
+                  setSelectedEtapa("ALL");
                   setSelectedShift("ALL");
                 }}
                 className="text-[10px] font-extrabold text-rose-500 hover:text-rose-600 hover:underline transition-colors"
@@ -304,33 +403,44 @@ export default function EfetivoFixoMap() {
                       <span className="absolute left-0 top-0 bottom-0 w-1.5 bg-indigo-500 rounded-r"></span>
                     )}
 
-                    <div className="space-y-1.5 flex-grow min-w-0 pr-1">
-                      <div className="flex items-center space-x-2">
-                        <span className={`text-xs font-bold transition-colors uppercase tracking-wide ${
-                          isSelected 
-                            ? "text-indigo-600 dark:text-indigo-400 font-extrabold" 
-                            : "text-slate-800 dark:text-slate-100 group-hover:text-indigo-500 dark:group-hover:text-indigo-400"
-                        }`}>
-                          {p.nome}
-                        </span>
-                        <span className={`text-[8px] px-2 py-0.5 rounded-md font-black tracking-wide border ${
-                          p.horario.includes("13:30") 
-                            ? "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-450" 
-                            : "bg-sky-500/10 border-sky-500/20 text-sky-600 dark:text-sky-450"
-                        }`}>
-                          {p.etapa}
-                        </span>
+                    <div className="space-y-1.5 flex-grow min-w-0 pr-1 flex items-center gap-3">
+                      {/* Avatar container */}
+                      <div className="w-8 h-8 rounded-full overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-150 flex-shrink-0">
+                        <img 
+                          src={getAgentPhoto(p.nome, p.foto || photos[p.nome])} 
+                          alt={p.nome}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
                       </div>
-                      
-                      {/* Local de Apoio - COMPLETELY VISIBLE AND FULL */}
-                      <div className="flex items-start text-[11px] text-slate-550 dark:text-slate-400 gap-1.5">
-                        <MapPin className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 transition-colors ${isSelected ? "text-indigo-500" : "text-slate-400 group-hover:text-indigo-400"}`} />
-                        <span className="break-words font-medium leading-relaxed">
-                          <strong className="text-slate-700 dark:text-slate-200 font-bold uppercase">{p.localApoio}</strong>
-                          {p.especifico && (
-                            <span className="text-slate-500 dark:text-slate-400"> × {p.especifico}</span>
-                          )}
-                        </span>
+                      <div className="flex-grow min-w-0">
+                        <div className="flex items-center space-x-2">
+                          <span className={`text-xs font-bold transition-colors uppercase tracking-wide truncate block ${
+                            isSelected 
+                              ? "text-indigo-600 dark:text-indigo-400 font-extrabold" 
+                              : "text-slate-800 dark:text-slate-100 group-hover:text-indigo-500 dark:group-hover:text-indigo-400"
+                          }`}>
+                            {p.nome}
+                          </span>
+                          <span className={`text-[8px] px-2 py-0.5 rounded-md font-black tracking-wide border flex-shrink-0 ${
+                            p.horario.includes("13:30") 
+                              ? "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-450" 
+                              : "bg-sky-500/10 border-sky-500/20 text-sky-600 dark:text-sky-450"
+                          }`}>
+                            {p.etapa}
+                          </span>
+                        </div>
+                        
+                        {/* Local de Apoio - COMPLETELY VISIBLE AND FULL */}
+                        <div className="flex items-start text-[11px] text-slate-550 dark:text-slate-400 gap-1.5 mt-1">
+                          <MapPin className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 transition-colors ${isSelected ? "text-indigo-500" : "text-slate-400 group-hover:text-indigo-400"}`} />
+                          <span className="break-words font-medium leading-relaxed">
+                            <strong className="text-slate-700 dark:text-slate-200 font-bold uppercase">{p.localApoio}</strong>
+                            {p.especifico && (
+                              <span className="text-slate-500 dark:text-slate-400"> × {p.especifico}</span>
+                            )}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -349,10 +459,22 @@ export default function EfetivoFixoMap() {
                 );
               })
             ) : (
-              <div className="py-16 text-center text-slate-450">
-                <Users className="w-10 h-10 mx-auto opacity-15 mb-2.5 animate-pulse" />
+              <div className="py-16 text-center text-slate-450 flex flex-col items-center justify-center">
+                <Users className="w-10 h-10 mx-auto opacity-15 mb-2.5 animate-pulse text-indigo-500" />
                 <p className="text-xs font-bold text-slate-750 dark:text-slate-350">Nenhum posto fixo localizado.</p>
-                <p className="text-[10px] text-slate-550 mt-1">Tente alterar os filtros de vias ou turnos acima.</p>
+                <p className="text-[10px] text-slate-550 mt-1 mb-4">Tente alterar os filtros de vias ou turnos acima.</p>
+                <button
+                  onClick={() => {
+                    setSearchTerm("");
+                    setSelectedAvenue("ALL");
+                    setSelectedEtapa("ALL");
+                    setSelectedShift("ALL");
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl shadow-sm transition-all cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Limpar Filtros
+                </button>
               </div>
             )}
           </div>
@@ -364,14 +486,29 @@ export default function EfetivoFixoMap() {
           {/* Detailed Info Card */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-5 rounded-2xl shadow-sm flex flex-col space-y-4">
             
-            <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
-              <span className="text-[8px] text-indigo-500 dark:text-indigo-400 font-extrabold uppercase tracking-wider block">Ficha do Posto Fixo</span>
-              <h3 className="text-sm font-black text-slate-900 dark:text-white mt-0.5 uppercase tracking-wide">
-                {selectedPost ? selectedPost.nome : "Selecione um Agente"}
-              </h3>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold mt-1">
-                {selectedPost?.cargo || "Orientador I"}
-              </p>
+            <div className="border-b border-slate-100 dark:border-slate-800 pb-3 flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-grow">
+                <span className="text-[8px] text-indigo-500 dark:text-indigo-400 font-extrabold uppercase tracking-wider block">Ficha do Posto Fixo</span>
+                <h3 className="text-sm font-black text-slate-900 dark:text-white mt-0.5 uppercase tracking-wide truncate">
+                  {selectedPost ? selectedPost.nome : "Selecione um Agente"}
+                </h3>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold mt-1">
+                  {selectedPost?.cargo || "Orientador I"}
+                </p>
+              </div>
+
+              {selectedPost && (
+                <div className="flex-shrink-0">
+                  <div className="w-16 h-16 rounded-xl overflow-hidden border border-slate-150 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center relative shadow-sm">
+                    <img 
+                      src={photos[selectedPost.nome] || getAgentPhoto(selectedPost.nome, selectedPost.foto)} 
+                      alt={selectedPost.nome} 
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {selectedPost ? (
@@ -400,11 +537,11 @@ export default function EfetivoFixoMap() {
                 {/* Shift, contact & stage */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-slate-50 dark:bg-slate-950/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-850">
-                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight block">Horário Operacional</span>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">HORÁRIO</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200 block mt-1 text-[11px]">{selectedPost.horario}</span>
                   </div>
                   <div className="bg-slate-50 dark:bg-slate-950/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-850">
-                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight block">Etapa e Turno</span>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">ETAPA</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200 block mt-1 text-[11px] uppercase">{selectedPost.etapa}</span>
                   </div>
                 </div>
@@ -471,60 +608,6 @@ export default function EfetivoFixoMap() {
                 <p className="text-[10px] text-slate-500">Selecione um agente na lista para visualizar.</p>
               </div>
             )}
-          </div>
-
-          {/* Mini Interactive SVG Map Grid */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex flex-col space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center">
-                <Layers className="w-3.5 h-3.5 text-indigo-500 mr-1.5" />
-                Vetor de Posicionamento Recife
-              </span>
-              <span className="text-[9px] font-bold bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full uppercase">
-                Simulação Ativa
-              </span>
-            </div>
-
-            {/* Simulated Geographic Canvas */}
-            <div className="h-28 bg-slate-50 dark:bg-slate-950 rounded-xl relative border border-slate-100 dark:border-slate-800 overflow-hidden flex items-center justify-center">
-              
-              {/* Coordinates scale overlay */}
-              <div className="absolute top-1.5 left-2 text-[8px] text-slate-400 font-mono">
-                Agamenon Magalhães Axis: 8.056°S / 34.898°W
-              </div>
-
-              {/* Graphic background - simple stylized grid */}
-              <svg className="absolute inset-0 w-full h-full opacity-[0.06] dark:opacity-[0.12]" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor" strokeWidth="1" />
-                  </pattern>
-                </defs>
-                <rect width="100%" height="100%" fill="url(#grid)" />
-              </svg>
-
-              {/* Stylized main avenues lines */}
-              <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-indigo-500/10 dark:bg-indigo-400/20"></div>
-              <div className="absolute left-1/3 top-0 bottom-0 w-0.5 bg-indigo-500/10 dark:bg-indigo-400/20"></div>
-
-              {/* Dynamic Point Overlay */}
-              {selectedPost && selectedPost.lat ? (
-                <div className="relative z-10 flex flex-col items-center">
-                  <div className="relative">
-                    <span className="absolute -inset-1 rounded-full bg-indigo-500/30 animate-ping"></span>
-                    <MapPin className="w-6 h-6 text-indigo-500 relative z-10" />
-                  </div>
-                  <span className="text-[8px] font-black text-slate-850 dark:text-slate-150 uppercase bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 px-1.5 py-0.5 rounded shadow mt-1 flex items-center space-x-1 whitespace-nowrap">
-                    <span>{selectedPost.especifico || selectedPost.localApoio}</span>
-                  </span>
-                </div>
-              ) : (
-                <div className="text-center space-y-1 z-10">
-                  <Compass className="w-6 h-6 text-slate-400 dark:text-slate-600 mx-auto animate-spin-slow" />
-                  <p className="text-[9px] font-bold text-slate-500">Aguardando coordenadas de cruzamento fixo</p>
-                </div>
-              )}
-            </div>
           </div>
 
         </div>

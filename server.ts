@@ -724,7 +724,8 @@ app.get("/api/efetivo-fixo", async (req, res) => {
         especifico: cols[7].trim(),
         horario: cols[8].trim(),
         lat,
-        lng
+        lng,
+        foto: cols[10] ? cols[10].trim() : ""
       });
     }
     res.json(data);
